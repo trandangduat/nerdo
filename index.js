@@ -1,7 +1,7 @@
 import TelegramBot from "node-telegram-bot-api";
 import mysql from 'mysql2/promise'
-import { createReminder, createUser, findUser } from "./db_op.js";
-import { parseReminder } from "./utils.js";
+import { createReminder, createUser, findUser, getReminders } from "./db_op.js";
+import { parseReminder, formatTime } from "./utils.js";
 
 const token = process.env.BOT_API;
 const bot = new TelegramBot(token, {polling: true});
@@ -53,21 +53,16 @@ bot.on("message", async(msg) => {
     const userId = msg.from.id;
     const chatId = msg.chat.id;
 
-    // console.log(msg);
-
     if (!await findUser(dbConnection, chatId, userId)) {
         await createUser(dbConnection, chatId, userId);
     }
 
-    console.log(userAction);
-
     if (userId in userAction) {
-        console.log("yassssssss");
         switch (userAction[userId]) {
             case "reminder_add": {
                 const reminder = parseReminder(text);
                 bot.sendMessage(chatId, JSON.stringify(reminder));
-                createReminder(dbConnection, chatId, userId, reminder.content, reminder.notiTime);
+                await createReminder(dbConnection, chatId, userId, reminder.content, reminder.notiTime);
                 break;
             }
             case "reminder_edit": {
@@ -104,9 +99,16 @@ bot.on("message", async(msg) => {
             const options = {
                 reply_markup: {
                     inline_keyboard
-                }
+                },
+                parse_mode: "HTML"
             };
-            bot.sendMessage(chatId, `hehe`, options);
+            const remindersList = await getReminders(dbConnection, chatId, userId);
+            let message = "📅 <b>Lời nhắc:</b>\n\n";
+            for (const reminder of remindersList) {
+                const notiTime = formatTime(reminder.notiTime);
+                message += `🔔 <b>${reminder.content}</b>\n🕒 <i>${notiTime}</i>\n\n`;
+            }
+            bot.sendMessage(chatId, message, options);
         }
     }
 

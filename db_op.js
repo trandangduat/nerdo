@@ -37,3 +37,19 @@ export const createReminder = async(con, chatId, userId, content, notiTime) => {
         console.log(error);
     }
 }
+
+export const getReminders = async(con, chatId, userId, limit = 5) => {
+    try {
+        limit = limit + '';
+        const sql = `SELECT content, notiTime FROM Reminders
+                     WHERE chatId = ? AND userId = ? AND isNotified = false
+                     ORDER BY notiTime DESC
+                     LIMIT ?`;
+        const values = [chatId, userId, limit];
+        const [rows] = await con.execute(sql, values);
+        return rows;
+
+    } catch (error) {
+        console.log(error);
+    }
+}
