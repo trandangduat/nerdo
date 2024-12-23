@@ -24,3 +24,16 @@ export const findUser = async(con, chatId, userId) => {
         return false;
     }
 };
+
+export const createReminder = async(con, chatId, userId, content, notiTime) => {
+    try {
+        const sql = `INSERT INTO Reminders (chatId, userId, content, notiTime)
+                     VALUES (?, ?, ?, ?)`;
+        const values = [chatId, userId, content, notiTime];
+        const [results] = await con.execute(sql, values);
+        console.log(results);
+
+    } catch (error) {
+        console.log(error);
+    }
+}
