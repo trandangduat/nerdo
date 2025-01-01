@@ -42,9 +42,9 @@ export const createReminder = async(con, chatId, userId, content, notiTime) => {
 export const getReminders = async(con, chatId, userId, limit = 5) => {
     try {
         limit = limit + '';
-        const sql = `SELECT content, notiTime FROM Reminders
+        const sql = `SELECT content, notiTime, id FROM Reminders
                      WHERE chatId = ? AND userId = ? AND isNotified = false
-                     ORDER BY notiTime DESC
+                     ORDER BY notiTime
                      LIMIT ?`;
         const values = [chatId, userId, limit];
         const [rows] = await con.execute(sql, values);
@@ -62,5 +62,17 @@ export const updateReminderNotifiedStatus = async(con, reminderId, status) => {
         const [results] = await con.execute(sql, values);
     } catch (error) {
         console.log(error);
+    }
+}
+
+export const deleteReminder = async(con, reminderId) => {
+    try {
+        const sql = "DELETE FROM Reminders WHERE id = ?";
+        const values = [reminderId];
+        const [results] = await con.execute(sql, values);
+        return true;
+    } catch (error) {
+        console.log(error);
+        return false;
     }
 }

@@ -1,7 +1,7 @@
 import TelegramBot from "node-telegram-bot-api";
 import mysql from 'mysql2/promise'
 import { scheduleJob } from "node-schedule";
-import { createReminder, createUser, findUser, getReminders, updateReminderNotifiedStatus } from "./db_op.js";
+import { createReminder, createUser, deleteReminder, findUser, getReminders, updateReminderNotifiedStatus } from "./db_op.js";
 import { parseReminder, formatTime } from "./utils.js";
 
 const token = process.env.BOT_API;
@@ -25,20 +25,14 @@ bot.on("callback_query", async(query) => {
     const userId = query.from.id;
     const chatId = msg.chat.id;
 
-    console.log(query);
-
     userAction[userId] = data;
 
     switch (data) {
         case "reminder_add": {
             const options = {
-                reply_markup: {
-                    force_reply: true,
-                    input_field_placeholder: "Điền nội dung lời nhắc...",
-                    selective: true
-                }
+                parse_mode: "MarkdownV2",
             };
-            const message = `Trả lời tin nhắn này bằng lời nhắc của bạn.\n Lời nhắc phải có dạng: <DD-MM-YY> <hh:mm> <Nội dung lời nhắc>`;
+            const message = "Vui lòng gửi lời nhắc theo định dạng:\n\n`<DD-MM-YY> <hh:mm> <Nội dung lời nhắc>`\n\nVí dụ: `25-12-23 18:30 Mua quà Giáng Sinh`";
             bot.sendMessage(chatId, message, options);
             break;
         }
@@ -46,12 +40,12 @@ bot.on("callback_query", async(query) => {
             break;
         }
         case "reminder_remove": {
+            const options = {};
+            const message = "Vui lòng gửi id của lời nhắc bạn muốn xoá.";
+            bot.sendMessage(chatId, message, options);
             break;
         }
     }
-
-    bot.answerCallbackQuery(query.id, { text: 'Processed!' });
-
 });
 
 bot.on("message", async(msg) => {
@@ -67,11 +61,10 @@ bot.on("message", async(msg) => {
         switch (userAction[userId]) {
             case "reminder_add": {
                 const reminder = parseReminder(text);
-                bot.sendMessage(chatId, JSON.stringify(reminder));
-
                 const dbResult = await createReminder(dbConnection, chatId, userId, reminder.content, reminder.notiTime);
                 if (dbResult) {
                     scheduleJob(reminder.notiTime, async () => await sendReminder(chatId, dbResult.insertId, reminder.content));
+                    bot.sendMessage(chatId, "Đã lưu thành công lời nhắc!");
                 }
 
                 break;
@@ -80,6 +73,10 @@ bot.on("message", async(msg) => {
                 break;
             }
             case "reminder_remove": {
+                const dbResult = await deleteReminder(dbConnection, text);
+                if (dbResult) {
+                    bot.sendMessage(chatId, "Đã xoá thành công lời nhắc!");
+                }
                 break;
             }
         }
@@ -117,7 +114,7 @@ bot.on("message", async(msg) => {
             let message = "📅 <b>Lời nhắc:</b>\n\n";
             for (const reminder of remindersList) {
                 const notiTime = formatTime(reminder.notiTime);
-                message += `🔔 <b>${reminder.content}</b>\n🕒 <i>${notiTime}</i>\n\n`;
+                message += `🔔 <b>${reminder.content}</b>[#${reminder.id}]\n🕒 <i>${notiTime}</i>\n\n`;
             }
             bot.sendMessage(chatId, message, options);
         }
