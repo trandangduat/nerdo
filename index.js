@@ -3,6 +3,7 @@ import mysql from 'mysql2/promise'
 import { scheduleJob } from "node-schedule";
 import { createReminder, createUser, deleteReminder, findUser, getReminders, updateReminderNotifiedStatus } from "./db_op.js";
 import { parseReminder, formatTime } from "./utils.js";
+import * as BOT_MSG from "./bot_msg.js";
 
 const token = process.env.BOT_API;
 const bot = new TelegramBot(token, {polling: true});
@@ -32,8 +33,7 @@ bot.on("callback_query", async(query) => {
             const options = {
                 parse_mode: "MarkdownV2",
             };
-            const message = "Vui lòng gửi lời nhắc theo định dạng:\n\n`<DD-MM-YY> <hh:mm> <Nội dung lời nhắc>`\n\nVí dụ: `25-12-23 18:30 Mua quà Giáng Sinh`";
-            bot.sendMessage(chatId, message, options);
+            bot.sendMessage(chatId, BOT_MSG.ADD_REMINDER_INSTRUCTION, options);
             break;
         }
         case "reminder_edit": {
@@ -41,8 +41,7 @@ bot.on("callback_query", async(query) => {
         }
         case "reminder_remove": {
             const options = {};
-            const message = "Vui lòng gửi id của lời nhắc bạn muốn xoá.";
-            bot.sendMessage(chatId, message, options);
+            bot.sendMessage(chatId, BOT_MSG.REMOVE_REMINDER_INSTRUCTION, options);
             break;
         }
     }
@@ -64,7 +63,7 @@ bot.on("message", async(msg) => {
                 const dbResult = await createReminder(dbConnection, chatId, userId, reminder.content, reminder.notiTime);
                 if (dbResult) {
                     scheduleJob(reminder.notiTime, async () => await sendReminder(chatId, dbResult.insertId, reminder.content));
-                    bot.sendMessage(chatId, "Đã lưu thành công lời nhắc!");
+                    bot.sendMessage(chatId, BOT_MSG.REMINDER_SAVED_SUCCESS);
                 }
 
                 break;
@@ -75,7 +74,7 @@ bot.on("message", async(msg) => {
             case "reminder_remove": {
                 const dbResult = await deleteReminder(dbConnection, text);
                 if (dbResult) {
-                    bot.sendMessage(chatId, "Đã xoá thành công lời nhắc!");
+                    bot.sendMessage(chatId, BOT_MSG.REMINDER_DELETED_SUCCESS);
                 }
                 break;
             }
