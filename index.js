@@ -1,6 +1,7 @@
 import TelegramBot from "node-telegram-bot-api";
 import mysql from 'mysql2/promise'
-import { createReminder, createUser, findUser, getReminders } from "./db_op.js";
+import { scheduleJob } from "node-schedule";
+import { createReminder, createUser, findUser, getReminders, updateReminderNotifiedStatus } from "./db_op.js";
 import { parseReminder, formatTime } from "./utils.js";
 
 const token = process.env.BOT_API;
@@ -12,6 +13,11 @@ const dbConnection = await mysql.createConnection({
     database: process.env.DB_DATABASE,
 });
 const userAction = {};
+
+const sendReminder = async (chatId, reminderId, content) => {
+    bot.sendMessage(chatId, content);
+    await updateReminderNotifiedStatus(dbConnection, reminderId, true);
+};
 
 bot.on("callback_query", async(query) => {
     const msg = query.message;
@@ -62,7 +68,12 @@ bot.on("message", async(msg) => {
             case "reminder_add": {
                 const reminder = parseReminder(text);
                 bot.sendMessage(chatId, JSON.stringify(reminder));
-                await createReminder(dbConnection, chatId, userId, reminder.content, reminder.notiTime);
+
+                const dbResult = await createReminder(dbConnection, chatId, userId, reminder.content, reminder.notiTime);
+                if (dbResult) {
+                    scheduleJob(reminder.notiTime, async () => await sendReminder(chatId, dbResult.insertId, reminder.content));
+                }
+
                 break;
             }
             case "reminder_edit": {
@@ -111,5 +122,4 @@ bot.on("message", async(msg) => {
             bot.sendMessage(chatId, message, options);
         }
     }
-
 });

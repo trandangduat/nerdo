@@ -31,10 +31,11 @@ export const createReminder = async(con, chatId, userId, content, notiTime) => {
                      VALUES (?, ?, ?, ?)`;
         const values = [chatId, userId, content, notiTime];
         const [results] = await con.execute(sql, values);
-        console.log(results);
+        return results;
 
     } catch (error) {
         console.log(error);
+        return null;
     }
 }
 
@@ -49,6 +50,16 @@ export const getReminders = async(con, chatId, userId, limit = 5) => {
         const [rows] = await con.execute(sql, values);
         return rows;
 
+    } catch (error) {
+        console.log(error);
+    }
+}
+
+export const updateReminderNotifiedStatus = async(con, reminderId, status) => {
+    try {
+        const sql = "UPDATE Reminders SET isNotified = ? WHERE id = ?";
+        const values = [status, reminderId];
+        const [results] = await con.execute(sql, values);
     } catch (error) {
         console.log(error);
     }
