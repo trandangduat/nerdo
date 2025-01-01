@@ -33,6 +33,7 @@ bot.on("callback_query", async(query) => {
             const options = {
                 parse_mode: "MarkdownV2",
             };
+            bot.deleteMessage(chatId, msg.message_id);
             bot.sendMessage(chatId, BOT_MSG.ADD_REMINDER_INSTRUCTION, options);
             break;
         }
@@ -113,7 +114,7 @@ bot.on("message", async(msg) => {
             let message = "📅 <b>Lời nhắc:</b>\n\n";
             for (const reminder of remindersList) {
                 const notiTime = formatTime(reminder.notiTime);
-                message += `🔔 <b>${reminder.content}</b>[#${reminder.id}]\n🕒 <i>${notiTime}</i>\n\n`;
+                message += `🔔 [#${reminder.id}] <b>${reminder.content}</b>\n🕒 <i>${notiTime}</i>\n\n`;
             }
             bot.sendMessage(chatId, message, options);
         }
