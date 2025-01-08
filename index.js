@@ -130,41 +130,44 @@ bot.on("message", async(msg) => {
             }
         }
 
-    } else {
-        if (text == "/start") {
-            let inline_keyboard = [
-                [
-                    {
-                        text: "Add a reminder",
-                        callback_data: "reminder_add",
-                    },
-                ],
-                [
-                    {
-                        text: "Edit a reminder",
-                        callback_data: "reminder_edit",
-                    },
-                ],
-                [
-                    {
-                        text: "Remove a reminder",
-                        callback_data: "reminder_remove",
-                    },
-                ],
-            ];
-            const options = {
-                reply_markup: {
-                    inline_keyboard
-                },
-                parse_mode: "HTML"
-            };
-            const remindersList = await getReminders(dbConnection, chatId, userId);
-            let message = "📅 <b>Lời nhắc:</b>\n\n";
-            for (const reminder of remindersList) {
-                const notiTime = formatTime(reminder.notiTime);
-                message += `🔔 [#${reminder.id}] <b>${reminder.content}</b>\n🕒 <i>${notiTime}</i>\n\n`;
-            }
-            bot.sendMessage(chatId, message, options);
-        }
     }
+});
+
+bot.onText(/\/start/, async(msg) => {
+    const userId = msg.from.id;
+    const chatId = msg.chat.id;
+
+    let inline_keyboard = [
+        [
+            {
+                text: "Add a reminder",
+                callback_data: "reminder_add",
+            },
+        ],
+        [
+            {
+                text: "Edit a reminder",
+                callback_data: "reminder_edit",
+            },
+        ],
+        [
+            {
+                text: "Remove a reminder",
+                callback_data: "reminder_remove",
+            },
+        ],
+    ];
+    const options = {
+        reply_markup: {
+            inline_keyboard
+        },
+        parse_mode: "HTML"
+    };
+    const remindersList = await getReminders(dbConnection, chatId, userId);
+    let message = "📅 <b>Lời nhắc:</b>\n\n";
+    for (const reminder of remindersList) {
+        const notiTime = formatTime(reminder.notiTime);
+        message += `🔔 [#${reminder.id}] <b>${reminder.content}</b>\n🕒 <i>${notiTime}</i>\n\n`;
+    }
+    bot.sendMessage(chatId, message, options);
 });
