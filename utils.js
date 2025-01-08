@@ -13,6 +13,18 @@ export const parseReminder = (text) => {
     const notiTime = new Date(year + 2000, month - 1, day, hours, minutes);
     return { content, notiTime };
 }
+export const toReminderString = (reminder, notiTime) => { // Convert to format: DD-MM-YY hh:mm reminder
+    const date = notiTime.toLocaleString("en-GB", {
+        day: "2-digit",
+        month: "2-digit",
+        year: "2-digit"
+    }).replace(/\//g, '-');
+    const time = notiTime.toLocaleString("en-GB", {
+        hour: "2-digit",
+        minute: "2-digit"
+    });
+    return `${date} ${time} ${reminder}`;
+}
 
 export const formatTime = (date) => {
     return new Date(date).toLocaleString("en-GB", {
@@ -22,4 +34,10 @@ export const formatTime = (date) => {
         hour: "2-digit",
         minute: "2-digit"
     });
+}
+
+export const removeBeginningMention = (text) => {
+    let textArr = text.split(" ");
+    textArr.shift();
+    return textArr.join(" ");
 }
