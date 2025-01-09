@@ -5,7 +5,7 @@ export const parseReminder = (text) => {
     const regex = /(\d{2}\/\d{2}\/\d{2})\s+(\d{2}:\d{2})\s+(.+)/;
     const match = text.match(regex);
     if (!match) {
-        throw new Error("Invalid reminder format. Expected format: <DD/MM/YY> <hh:mm> <Nội dung lời nhắc>");
+        return null;
     }
     const [_, date, time, content] = match;
     const [day, month, year] = date.split('/').map(Number);

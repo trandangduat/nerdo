@@ -95,7 +95,12 @@ bot.on("message", async(msg) => {
 
         switch (action) {
             case "reminder_add": {
-                const {content, notiTime} = parseReminder(text);
+                const {content, notiTime} = parseReminder(text) || {};
+                if (content === undefined) {
+                    bot.sendMessage(chatId, BOT_MSG.WRONG_REMINDER_FORMAT, { parse_mode: "MarkdownV2" });
+                    userAction[userId] = "reminder_add";
+                    break;
+                }
                 const dbResult = await createReminder(dbConnection, chatId, userId, content, notiTime);
                 if (dbResult) {
                     await setScheduleJob(chatId, userId, dbResult.insertId, content, notiTime);
