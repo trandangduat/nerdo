@@ -26,6 +26,10 @@ const setScheduleJob = async(chatId, userId, reminderId, reminderContent, notiTi
     if (scheduleJobs[chatId] === undefined) {
         scheduleJobs[chatId] = {};
     }
+    if (scheduleJobs[chatId][reminderId] !== undefined) {
+        scheduleJobs[chatId][reminderId].cancel();
+        console.log("Cancel successfully");
+    }
     scheduleJobs[chatId][reminderId] = scheduleJob(notiTime, async() => {
         await sendReminder(chatId, reminderId, reminderContent)
     });
@@ -130,11 +134,11 @@ bot.on("message", async(msg) => {
                 if (currentReminderId == null) {
                     console.log("currentReminderId is null");
                 }
-                const reminder = parseReminder(text);
+                const {notiTime, content} = parseReminder(text);
                 const reminderId = currentReminderId;
-                const dbResult = await updateReminder(dbConnection, reminderId, reminder.notiTime, reminder.content);
+                const dbResult = await updateReminder(dbConnection, reminderId, notiTime, content);
                 if (dbResult) {
-                    scheduleJob(reminder.notiTime, async () => await sendReminder(chatId, dbResult.insertId, reminder.content));
+                    await setScheduleJob(chatId, userId, reminderId, content, notiTime);
                     bot.sendMessage(chatId, BOT_MSG.REMINDER_SAVED_SUCCESS);
                 }
                 currentReminderId = null;
