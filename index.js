@@ -1,7 +1,7 @@
 import TelegramBot from "node-telegram-bot-api";
 import mysql from 'mysql2/promise'
 import { scheduleJob } from "node-schedule";
-import { createReminder, createUser, deleteReminder, findUser, getReminder, getReminders, updateReminder, updateReminderNotifiedStatus } from "./db_op.js";
+import { createReminder, createUser, deleteReminder, findUser, getAllReminders, getReminder, getReminders, updateReminder, updateReminderNotifiedStatus } from "./db_op.js";
 import { parseReminder, formatTime, toReminderString, removeBeginningMention } from "./utils.js";
 import * as BOT_MSG from "./bot_msg.js";
 
@@ -15,11 +15,32 @@ const dbConnection = await mysql.createConnection({
 });
 const userAction = {};
 let currentReminderId = null;
+const scheduleJobs = {};
 
 const sendReminder = async (chatId, reminderId, content) => {
     bot.sendMessage(chatId, content);
     await updateReminderNotifiedStatus(dbConnection, reminderId, true);
 };
+
+const setScheduleJob = async(chatId, userId, reminderId, reminderContent, notiTime) => {
+    if (scheduleJobs[chatId] === undefined) {
+        scheduleJobs[chatId] = {};
+    }
+    scheduleJobs[chatId][reminderId] = scheduleJob(notiTime, async() => {
+        await sendReminder(chatId, reminderId, reminderContent)
+    });
+    console.log("LƯU THÀNH CÔNG SCHEDULE JOB " + reminderId + ` ${reminderContent}`);
+};
+
+const resetScheduleJobs = async () => {
+    const reminders = await getAllReminders(dbConnection);
+    for (const reminder of reminders) {
+        const { chatId, userId, id, content, notiTime } = reminder;
+        await setScheduleJob(chatId, userId, id, content, notiTime);
+    }
+};
+
+resetScheduleJobs();
 
 bot.on("callback_query", async(query) => {
     const msg = query.message;
@@ -70,10 +91,10 @@ bot.on("message", async(msg) => {
 
         switch (action) {
             case "reminder_add": {
-                const reminder = parseReminder(text);
-                const dbResult = await createReminder(dbConnection, chatId, userId, reminder.content, reminder.notiTime);
+                const {content, notiTime} = parseReminder(text);
+                const dbResult = await createReminder(dbConnection, chatId, userId, content, notiTime);
                 if (dbResult) {
-                    scheduleJob(reminder.notiTime, async () => await sendReminder(chatId, dbResult.insertId, reminder.content));
+                    await setScheduleJob(chatId, userId, dbResult.insertId, content, notiTime);
                     bot.sendMessage(chatId, BOT_MSG.REMINDER_SAVED_SUCCESS);
                 }
 

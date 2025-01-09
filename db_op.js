@@ -69,6 +69,19 @@ export const getReminders = async(con, chatId, userId, limit = 5) => {
         return null;
     }
 }
+export const getAllReminders = async(con) => {
+    try {
+        const sql = `SELECT content, notiTime, id, chatId FROM Reminders
+                     WHERE isNotified = false
+                     ORDER BY notiTime`;
+        const [rows] = await con.execute(sql);
+        return rows;
+
+    } catch (error) {
+        console.log(error);
+        return null;
+    }
+}
 export const updateReminder = async(con, reminderId, notiTime, reminder) => {
     try {
         const sql = "UPDATE Reminders SET notiTime = ?, content = ? WHERE id = ?";
