@@ -44,6 +44,10 @@ const resetScheduleJobs = async () => {
     const reminders = await getAllReminders(dbConnection);
     for (const reminder of reminders) {
         const { chatId, userId, id, content, notiTime } = reminder;
+        if (notiTime <= Date.now()) {
+            console.log(BOT_MSG.REMINDER_DATE_IN_PAST_ERROR);
+            continue;
+        }
         await setScheduleJob(chatId, userId, id, content, notiTime);
     }
 };
@@ -195,6 +199,8 @@ bot.on("message", async(msg) => {
 bot.onText(/\/start/, async(msg) => {
     const userId = msg.from.id;
     const chatId = msg.chat.id;
+
+    delete userAction[userId];
 
     let inline_keyboard = [
         [
