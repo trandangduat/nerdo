@@ -9,3 +9,4 @@ export const REMINDER_DELETED_SUCCESS = `Đã xoá thành công lời nhắc!\n$
 export const REMINDER_EDITED_SUCCESS = `Đã sửa thành công lời nhắc!\n${NOTE}`;
 export const WRONG_REMINDER_FORMAT = "Sai định dạng, vui lòng gửi theo đúng định dạng \n\n`<DD/MM/YY> <hh:mm> <Nội dung lời nhắc>`";
 export const REMINDER_DATE_IN_PAST_ERROR = "Thời gian đặt lời nhắc đã ở trong quá khứ, vui lòng chọn thời gian trong tương lai.";
+export const WRONG_REMINDER_ID = "Sai định dạng ID lời nhắc hoặc ID lời nhắc không tồn tại.";

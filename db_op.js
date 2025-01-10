@@ -109,9 +109,9 @@ export const deleteReminder = async(con, reminderId) => {
         const sql = "DELETE FROM Reminders WHERE id = ?";
         const values = [reminderId];
         const [results] = await con.execute(sql, values);
-        return true;
+        return results;
     } catch (error) {
         console.log(error);
-        return false;
+        return null;
     }
 }

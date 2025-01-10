@@ -115,12 +115,17 @@ bot.on("message", async(msg) => {
                 break;
             }
             case "reminder_edit": {
-                const reminderId = text;
+                const reminderId = escapeMarkdown(text);
                 currentReminderId = reminderId;
                 const dbResult = await getReminder(dbConnection, reminderId);
                 if (dbResult) {
-                    const reminder = dbResult[0];
+                    const reminder = dbResult[0] || {};
                     const {notiTime, content} = reminder;
+                    if (notiTime === undefined) {
+                        bot.sendMessage(chatId, BOT_MSG.WRONG_REMINDER_ID);
+                        userAction[userId] = "reminder_edit";
+                        break;
+                    }
 
                     const text = `Lời nhắc \\#${reminderId}:\n🔔 *${escapeMarkdown(content)}*\n🕒 _${formatTime(notiTime)}_\n\n${BOT_MSG.EDIT_REMINDER_INSTRUCTION}`;
                     const options = {
@@ -167,10 +172,13 @@ bot.on("message", async(msg) => {
                 break;
             }
             case "reminder_remove": {
-                const reminderId = text;
+                const reminderId = escapeMarkdown(text);
                 const dbResult = await deleteReminder(dbConnection, reminderId);
-                if (dbResult) {
+                if (dbResult.affectedRows > 0) {
                     bot.sendMessage(chatId, BOT_MSG.REMINDER_DELETED_SUCCESS);
+                } else {
+                    bot.sendMessage(chatId, BOT_MSG.WRONG_REMINDER_ID);
+                    userAction[userId] = "reminder_remove";
                 }
                 break;
             }
