@@ -22,14 +22,18 @@ const sendReminder = async (chatId, reminderId, content) => {
     await updateReminderNotifiedStatus(dbConnection, reminderId, true);
 };
 
-const setScheduleJob = async(chatId, userId, reminderId, reminderContent, notiTime) => {
-    if (scheduleJobs[chatId] === undefined) {
-        scheduleJobs[chatId] = {};
-    }
+const cancelScheduledJob = (chatId, reminderId) => {
     if (scheduleJobs[chatId][reminderId] !== undefined && scheduleJobs[chatId][reminderId] != null) {
         scheduleJobs[chatId][reminderId].cancel();
         console.log("Cancel successfully");
     }
+};
+
+const setScheduleJob = async(chatId, userId, reminderId, reminderContent, notiTime) => {
+    if (scheduleJobs[chatId] === undefined) {
+        scheduleJobs[chatId] = {};
+    }
+    cancelScheduledJob(chatId, reminderId);
     scheduleJobs[chatId][reminderId] = scheduleJob(notiTime, async() => {
         await sendReminder(chatId, reminderId, reminderContent)
     });
@@ -175,6 +179,7 @@ bot.on("message", async(msg) => {
                 const reminderId = escapeMarkdown(text);
                 const dbResult = await deleteReminder(dbConnection, reminderId);
                 if (dbResult && dbResult.affectedRows > 0) {
+                    cancelScheduledJob(chatId, reminderId);
                     bot.sendMessage(chatId, BOT_MSG.REMINDER_DELETED_SUCCESS);
                 } else {
                     bot.sendMessage(chatId, BOT_MSG.WRONG_REMINDER_ID);
