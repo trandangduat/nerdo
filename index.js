@@ -2,7 +2,7 @@ import TelegramBot from "node-telegram-bot-api";
 import mysql from 'mysql2/promise'
 import { scheduledJobs, scheduleJob } from "node-schedule";
 import { createReminder, createUser, deleteReminder, findUser, getAllReminders, getReminder, getReminders, updateReminder, updateReminderNotifiedStatus } from "./db_op.js";
-import { parseReminder, formatTime, toReminderString, removeBeginningMention } from "./utils.js";
+import { parseReminder, formatTime, toReminderString, removeBeginningMention, escapeMarkdown } from "./utils.js";
 import * as BOT_MSG from "./bot_msg.js";
 
 const token = process.env.BOT_API;
@@ -26,7 +26,7 @@ const setScheduleJob = async(chatId, userId, reminderId, reminderContent, notiTi
     if (scheduleJobs[chatId] === undefined) {
         scheduleJobs[chatId] = {};
     }
-    if (scheduleJobs[chatId][reminderId] !== undefined) {
+    if (scheduleJobs[chatId][reminderId] !== undefined && scheduleJobs[chatId][reminderId] != null) {
         scheduleJobs[chatId][reminderId].cancel();
         console.log("Cancel successfully");
     }
@@ -120,8 +120,9 @@ bot.on("message", async(msg) => {
                 const dbResult = await getReminder(dbConnection, reminderId);
                 if (dbResult) {
                     const reminder = dbResult[0];
-                    const notiTime = formatTime(reminder.notiTime);
-                    const content = `Lời nhắc \\#${reminderId}:\n🔔 *${reminder.content}*\n🕒 _${notiTime}_\n\n${BOT_MSG.EDIT_REMINDER_INSTRUCTION}`;
+                    const {notiTime, content} = reminder;
+
+                    const text = `Lời nhắc \\#${reminderId}:\n🔔 *${escapeMarkdown(content)}*\n🕒 _${formatTime(notiTime)}_\n\n${BOT_MSG.EDIT_REMINDER_INSTRUCTION}`;
                     const options = {
                         parse_mode: "MarkdownV2",
                         reply_markup: {
@@ -129,13 +130,13 @@ bot.on("message", async(msg) => {
                                 [
                                     {
                                         text: "Ấn vào đây để sửa lời nhắc" + ` #${reminderId}`,
-                                        switch_inline_query_current_chat: toReminderString(reminder.content, reminder.notiTime),
+                                        switch_inline_query_current_chat: toReminderString(content, notiTime),
                                     },
                                 ],
                             ],
                         },
                     };
-                    bot.sendMessage(chatId, content, options);
+                    bot.sendMessage(chatId, text, options);
                     userAction[userId] = "reminder_editing";
                 }
                 break;

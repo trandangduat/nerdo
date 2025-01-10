@@ -41,3 +41,8 @@ export const removeBeginningMention = (text) => {
     textArr.shift();
     return textArr.join(" ");
 }
+const SPECIAL_CHARS = [ '\\', '_', '*', '[', ']', '(', ')', '~', '`', '>', '<', '&', '#', '+', '-', '=', '|', '{', '}', '.', '!' ];
+export const escapeMarkdown = (text) => {
+    SPECIAL_CHARS.forEach(char => (text = text.replaceAll(char, `\\${char}`)));
+    return text;
+}
