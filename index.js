@@ -174,7 +174,7 @@ bot.on("message", async(msg) => {
             case "reminder_remove": {
                 const reminderId = escapeMarkdown(text);
                 const dbResult = await deleteReminder(dbConnection, reminderId);
-                if (dbResult.affectedRows > 0) {
+                if (dbResult && dbResult.affectedRows > 0) {
                     bot.sendMessage(chatId, BOT_MSG.REMINDER_DELETED_SUCCESS);
                 } else {
                     bot.sendMessage(chatId, BOT_MSG.WRONG_REMINDER_ID);
