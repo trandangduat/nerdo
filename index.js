@@ -52,22 +52,13 @@ const resetScheduleJobs = async () => {
     }
 };
 
-resetScheduleJobs();
-
-bot.on("callback_query", async(query) => {
-    const msg = query.message;
-    const data = query.data;
-    const userId = query.from.id;
-    const chatId = msg.chat.id;
-
+const handleQuery = (data, chatId, userId) => {
     userAction[userId] = data;
-
     switch (data) {
         case "reminder_add": {
             const options = {
                 parse_mode: "MarkdownV2",
             };
-            bot.deleteMessage(chatId, msg.message_id);
             bot.sendMessage(chatId, BOT_MSG.ADD_REMINDER_INSTRUCTION, options);
             break;
         }
@@ -82,6 +73,16 @@ bot.on("callback_query", async(query) => {
             break;
         }
     }
+};
+
+resetScheduleJobs();
+
+bot.on("callback_query", async(query) => {
+    const msg = query.message;
+    const data = query.data;
+    const userId = query.from.id;
+    const chatId = msg.chat.id;
+    handleQuery(data, chatId, userId);
 });
 
 bot.on("message", async(msg) => {
@@ -93,7 +94,11 @@ bot.on("message", async(msg) => {
         await createUser(dbConnection, chatId, userId);
     }
 
-    if (text[0] == '@') { // if message begins with someone's tag
+    if (text.startsWith('/')) {
+        return;
+    }
+
+    if (text.startsWith('@')) { // if message begins with someone's tag
         text = removeBeginningMention(text);
     }
 
@@ -235,4 +240,22 @@ bot.onText(/\/start/, async(msg) => {
         message += `🔔 [#${reminder.id}] <b>${reminder.content}</b>\n🕒 <i>${notiTime}</i>\n\n`;
     }
     bot.sendMessage(chatId, message, options);
+});
+
+bot.onText(/\/add/, async(msg) => {
+    const chatId = msg.chat.id;
+    const userId = msg.from.id;
+    handleQuery("reminder_add", chatId, userId);
+});
+
+bot.onText(/\/edit/, async(msg) => {
+    const chatId = msg.chat.id;
+    const userId = msg.from.id;
+    handleQuery("reminder_edit", chatId, userId);
+});
+
+bot.onText(/\/del/, async(msg) => {
+    const chatId = msg.chat.id;
+    const userId = msg.from.id;
+    handleQuery("reminder_remove", chatId, userId);
 });
