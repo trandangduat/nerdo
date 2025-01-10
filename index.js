@@ -1,6 +1,6 @@
 import TelegramBot from "node-telegram-bot-api";
 import mysql from 'mysql2/promise'
-import { scheduleJob } from "node-schedule";
+import { scheduledJobs, scheduleJob } from "node-schedule";
 import { createReminder, createUser, deleteReminder, findUser, getAllReminders, getReminder, getReminders, updateReminder, updateReminderNotifiedStatus } from "./db_op.js";
 import { parseReminder, formatTime, toReminderString, removeBeginningMention } from "./utils.js";
 import * as BOT_MSG from "./bot_msg.js";
@@ -101,6 +101,11 @@ bot.on("message", async(msg) => {
                     userAction[userId] = "reminder_add";
                     break;
                 }
+                if (notiTime <= Date.now()) {
+                    bot.sendMessage(chatId, BOT_MSG.REMINDER_DATE_IN_PAST_ERROR);
+                    userAction[userId] = "reminder_add";
+                    break;
+                }
                 const dbResult = await createReminder(dbConnection, chatId, userId, content, notiTime);
                 if (dbResult) {
                     await setScheduleJob(chatId, userId, dbResult.insertId, content, notiTime);
@@ -139,7 +144,17 @@ bot.on("message", async(msg) => {
                 if (currentReminderId == null) {
                     console.log("currentReminderId is null");
                 }
-                const {notiTime, content} = parseReminder(text);
+                const {notiTime, content} = parseReminder(text) || {};
+                if (content === undefined) {
+                    bot.sendMessage(chatId, BOT_MSG.WRONG_REMINDER_FORMAT, { parse_mode: "MarkdownV2" });
+                    userAction[userId] = "reminder_editing";
+                    break;
+                }
+                if (notiTime <= Date.now()) {
+                    bot.sendMessage(chatId, BOT_MSG.REMINDER_DATE_IN_PAST_ERROR);
+                    userAction[userId] = "reminder_editing";
+                    break;
+                }
                 const reminderId = currentReminderId;
                 const dbResult = await updateReminder(dbConnection, reminderId, notiTime, content);
                 if (dbResult) {
