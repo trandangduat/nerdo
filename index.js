@@ -13,6 +13,8 @@ const dbConnection = await mysql.createConnection({
     password: process.env.DB_PASS,
     database: process.env.DB_DATABASE,
 });
+console.log("KET NOI DATABASE THANH CONG!");
+
 const userAction = {};
 let currentReminderId = null;
 const scheduleJobs = {};
