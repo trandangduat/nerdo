@@ -10,16 +10,18 @@ export const parseReminder = (text) => {
     const [_, date, time, content] = match;
     const [day, month, year] = date.split('/').map(Number);
     const [hours, minutes] = time.split(':').map(Number);
-    const notiTime = new Date(year + 2000, month - 1, day, hours, minutes);
+    const notiTime = new Date(year + 2000, month - 1, day, hours, minutes).toISOString();
     return { content, notiTime };
 }
+
 export const toReminderString = (reminder, notiTime) => { // Convert to format: DD/MM/YY hh:mm reminder
-    const date = notiTime.toLocaleString("en-GB", {
+    const d = new Date(notiTime);
+    const date = d.toLocaleString("en-GB", {
         day: "2-digit",
         month: "2-digit",
         year: "2-digit"
     });
-    const time = notiTime.toLocaleString("en-GB", {
+    const time = d.toLocaleString("en-GB", {
         hour: "2-digit",
         minute: "2-digit"
     });

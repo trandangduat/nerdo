@@ -29,7 +29,7 @@ export const createReminder = async(con, chatId, userId, content, notiTime) => {
     try {
         const sql = `INSERT INTO Reminders (chatId, userId, content, notiTime)
                      VALUES (?, ?, ?, ?)`;
-        const values = [chatId, userId, content, notiTime];
+        const values = [chatId, userId, content, new Date(notiTime)];
         const [results] = await con.execute(sql, values);
         return results;
 
@@ -85,7 +85,7 @@ export const getAllReminders = async(con) => {
 export const updateReminder = async(con, reminderId, notiTime, reminder) => {
     try {
         const sql = "UPDATE Reminders SET notiTime = ?, content = ? WHERE id = ?";
-        const values = [notiTime, reminder, reminderId];
+        const values = [new Date(notiTime), reminder, reminderId];
         const [results] = await con.execute(sql, values);
         return results;
     } catch (error){

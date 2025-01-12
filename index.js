@@ -46,7 +46,8 @@ const resetScheduleJobs = async () => {
     const reminders = await getAllReminders(dbConnection);
     for (const reminder of reminders) {
         const { chatId, userId, id, content, notiTime } = reminder;
-        if (notiTime <= Date.now()) {
+        const utcNow = new Date().toISOString(); // Current time in UTC
+        if (notiTime <= utcNow) {
             console.log(BOT_MSG.REMINDER_DATE_IN_PAST_ERROR);
             continue;
         }
@@ -116,7 +117,8 @@ bot.on("message", async(msg) => {
                     userAction[userId] = "reminder_add";
                     break;
                 }
-                if (notiTime <= Date.now()) {
+                const utcNow = new Date().toISOString(); // Current time in UTC
+                if (notiTime <= utcNow) {
                     bot.sendMessage(chatId, BOT_MSG.REMINDER_DATE_IN_PAST_ERROR);
                     userAction[userId] = "reminder_add";
                     break;
@@ -171,7 +173,8 @@ bot.on("message", async(msg) => {
                     userAction[userId] = "reminder_editing";
                     break;
                 }
-                if (notiTime <= Date.now()) {
+                const utcNow = new Date().toISOString(); // Current time in UTC
+                if (notiTime <= utcNow) {
                     bot.sendMessage(chatId, BOT_MSG.REMINDER_DATE_IN_PAST_ERROR);
                     userAction[userId] = "reminder_editing";
                     break;
