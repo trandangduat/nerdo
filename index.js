@@ -1,7 +1,7 @@
 import TelegramBot from "node-telegram-bot-api";
 import mysql from 'mysql2/promise'
 import { scheduledJobs, scheduleJob } from "node-schedule";
-import { createReminder, createUser, deleteReminder, findUser, getAllReminders, getReminder, getReminders, updateReminder, updateReminderNotifiedStatus } from "./db_op.js";
+import { createReminder, createUser, deleteReminder, findUser, getAllReminders, getReminder, getReminders, updateReminder, updateReminderNotifiedStatus, updateUserTimezoneOffset } from "./db_op.js";
 import { parseReminder, formatTime, toReminderString, removeBeginningMention, escapeMarkdown } from "./utils.js";
 import * as BOT_MSG from "./bot_msg.js";
 
@@ -98,6 +98,11 @@ const handleQuery = (data, chatId, userId) => {
             bot.sendMessage(chatId, BOT_MSG.REMOVE_REMINDER_INSTRUCTION, options);
             break;
         }
+        case "timezone_update": {
+            const options = {};
+            bot.sendMessage(chatId, BOT_MSG.UPDATE_TIMEZONE_INSTRUCTION, options);
+            break;
+        }
     }
 };
 
@@ -120,11 +125,11 @@ bot.on("message", async(msg) => {
         await createUser(dbConnection, chatId, userId);
     }
 
-    if (text.startsWith('/')) {
+    if (text !== undefined && text.startsWith('/')) {
         return;
     }
 
-    if (text.startsWith('@')) { // if message begins with someone's tag
+    if (text !== undefined && text.startsWith('@')) { // if message begins with someone's tag
         text = removeBeginningMention(text);
     }
 
@@ -224,6 +229,14 @@ bot.on("message", async(msg) => {
                 }
                 break;
             }
+            case "timezone_update": {
+                const utcOffset = parseInt(escapeMarkdown(text));
+                const dbResult = await updateUserTimezoneOffset(dbConnection, chatId, userId, utcOffset);
+                if (dbResult) {
+                    bot.sendMessage(chatId, BOT_MSG.UPDATE_TIMEZONE_SUCCESS);
+                }
+                break;
+            }
         }
 
     }
@@ -233,7 +246,6 @@ bot.onText(/\/start/, async(msg) => {
     const userId = msg.from.id;
     const chatId = msg.chat.id;
 
-    delete userAction[userId];
 
     let inline_keyboard = [
         [
@@ -252,6 +264,12 @@ bot.onText(/\/start/, async(msg) => {
             {
                 text: "Remove a reminder",
                 callback_data: "reminder_remove",
+            },
+        ],
+        [
+            {
+                text: "Update timezone",
+                callback_data: "timezone_update",
             },
         ],
     ];

@@ -4,6 +4,7 @@ USE nerdo;
 CREATE TABLE Users (
     chatId BIGINT,
     userId BIGINT,
+    utcOffset INT,
     PRIMARY KEY (chatId, userId)
 );
 
