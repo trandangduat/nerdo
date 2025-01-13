@@ -7,14 +7,30 @@ import * as BOT_MSG from "./bot_msg.js";
 
 const token = process.env.BOT_API;
 const bot = new TelegramBot(token, {polling: true});
-const dbConnection = await mysql.createConnection({
-    host: process.env.DB_HOST,
-    user: process.env.DB_USER,
-    password: process.env.DB_PASS,
-    database: process.env.DB_DATABASE,
-});
-console.log("KET NOI DATABASE THANH CONG!");
 
+const connectToDatabase = async(attempts = 5) => {
+    let con;
+    while (attempts--) {
+        console.log("CONNECTING TO DATABASE ATTEMPT #" + (5 - attempts));
+        try {
+            con = await mysql.createConnection({
+                host: process.env.DB_HOST,
+                port: process.env.DB_PORT,
+                user: process.env.DB_USER,
+                password: process.env.DB_PASS,
+                database: process.env.DB_DATABASE,
+            });
+            console.log("KET NOI DATABASE THANH CONG!");
+            return con;
+        } catch(err) {
+            console.log(err);
+            await new Promise(resolve => setTimeout(resolve, 2000));
+        }
+    }
+    return null;
+};
+
+const dbConnection = await connectToDatabase();
 const userAction = {};
 let currentReminderId = null;
 const scheduleJobs = {};
@@ -40,6 +56,13 @@ const setScheduleJob = async(chatId, userId, reminderId, reminderContent, notiTi
         await sendReminder(chatId, reminderId, reminderContent)
     });
     console.log("LƯU THÀNH CÔNG SCHEDULE JOB " + reminderId + ` ${reminderContent}`);
+    console.log(chatId, reminderId);
+    console.log(notiTime);
+    try {
+        console.log(scheduleJobs[chatId][reminderId].pendingInvocations[0].fireDate);
+    } catch (err) {
+        console.log(scheduleJobs[chatId]);
+    }
 };
 
 const resetScheduleJobs = async () => {
