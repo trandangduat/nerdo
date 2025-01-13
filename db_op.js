@@ -36,6 +36,18 @@ export const updateUserTimezoneOffset = async(con, chatId, userId, utcOffset) =>
         return null;
     }
 };
+export const getAllUserTimezoneOffset = async(con) => {
+    try {
+        const sql = `SELECT userId, utcOffset FROM Users
+                     WHERE utcOffset IS NOT NULL`;
+        const [rows] = await con.execute(sql);
+        return rows;
+
+    } catch (error) {
+        console.log(error);
+        return null;
+    }
+};
 
 export const createReminder = async(con, chatId, userId, content, notiTime) => {
     try {
