@@ -2,7 +2,7 @@ import TelegramBot from "node-telegram-bot-api";
 import mysql from 'mysql2/promise'
 import { scheduledJobs, scheduleJob } from "node-schedule";
 import { createReminder, createUser, deleteReminder, findUser, getAllReminders, getAllUserTimezoneOffset, getReminder, getReminders, updateReminder, updateReminderNotifiedStatus, updateUserTimezoneOffset } from "./db_op.js";
-import { parseReminder, formatTime, toReminderString, removeBeginningMention, escapeMarkdown } from "./utils.js";
+import { parseReminder, formatTime, toReminderString, removeBeginningMention, escapeMarkdown, hourToMs } from "./utils.js";
 import * as BOT_MSG from "./bot_msg.js";
 
 const connectToDatabase = async(attempts = 5) => {
@@ -148,7 +148,7 @@ bot.on("message", async(msg) => {
 
         switch (action) {
             case "reminder_add": {
-                const {content, notiTime} = parseReminder(text) || {};
+                const {content, notiTime} = parseReminder(text, userUtcOffset[userId]) || {};
                 if (content === undefined) {
                     bot.sendMessage(chatId, BOT_MSG.WRONG_REMINDER_FORMAT, { parse_mode: "MarkdownV2" });
                     userAction[userId] = "reminder_add";
@@ -204,7 +204,7 @@ bot.on("message", async(msg) => {
                 if (currentReminderId == null) {
                     console.log("currentReminderId is null");
                 }
-                const {notiTime, content} = parseReminder(text) || {};
+                const {notiTime, content} = parseReminder(text, userUtcOffset[userId]) || {};
                 if (content === undefined) {
                     bot.sendMessage(chatId, BOT_MSG.WRONG_REMINDER_FORMAT, { parse_mode: "MarkdownV2" });
                     userAction[userId] = "reminder_editing";
@@ -240,10 +240,11 @@ bot.on("message", async(msg) => {
             }
             case "timezone_update": {
                 const utcOffset = parseInt(escapeMarkdown(text));
-                const dbResult = await updateUserTimezoneOffset(dbConnection, chatId, userId, utcOffset);
+                const utcOffsetInMs = hourToMs(utcOffset);
+                const dbResult = await updateUserTimezoneOffset(dbConnection, chatId, userId, utcOffsetInMs);
                 if (dbResult) {
                     bot.sendMessage(chatId, BOT_MSG.UPDATE_TIMEZONE_SUCCESS);
-                    userUtcOffset[userId] = utcOffset;
+                    userUtcOffset[userId] = utcOffsetInMs;
                 }
                 break;
             }

@@ -1,7 +1,22 @@
+const addOffset = (date, offsetInMs) => {
+    if (typeof offsetInMs !== 'number') {
+        console.log("offset khong phai la number");
+        return;
+    }
+    let newDate = new Date(date);
+    newDate.setTime(newDate.getTime() + offsetInMs);
+    return newDate;
+};
+export const hourToMs = (hour) => {
+    return hour * 60 * 60 * 1000;
+};
+export const minuteToMs = (minute) => {
+    return minute * 60 * 1000;
+};
 /**
  * Trích lời nhắc từ định dạng <DD/MM/YY> <hh:mm> <Nội dung lời nhắc>
  */
-export const parseReminder = (text) => {
+export const parseReminder = (text, utcOffsetInMs) => {
     const regex = /(\d{2}\/\d{2}\/\d{2})\s+(\d{2}:\d{2})\s+(.+)/;
     const match = text.match(regex);
     if (!match) {
@@ -10,7 +25,11 @@ export const parseReminder = (text) => {
     const [_, date, time, content] = match;
     const [day, month, year] = date.split('/').map(Number);
     const [hours, minutes] = time.split(':').map(Number);
-    const notiTime = new Date(year + 2000, month - 1, day, hours, minutes).toISOString();
+
+    const D = new Date(year + 2000, month - 1, day, hours, minutes);
+    const offset = -(minuteToMs(new Date().getTimezoneOffset()) + utcOffsetInMs);
+    console.log(utcOffsetInMs, minuteToMs(new Date().getTimezoneOffset()));
+    const notiTime = addOffset(D, offset).toISOString();
     return { content, notiTime };
 }
 
