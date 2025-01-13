@@ -181,7 +181,7 @@ bot.on("message", async(msg) => {
                         break;
                     }
 
-                    const text = `Lời nhắc \\#${reminderId}:\n🔔 *${escapeMarkdown(content)}*\n🕒 _${formatTime(notiTime)}_\n\n${BOT_MSG.EDIT_REMINDER_INSTRUCTION}`;
+                    const text = `Lời nhắc \\#${reminderId}:\n🔔 *${escapeMarkdown(content)}*\n🕒 _${formatTime(notiTime, userUtcOffset[userId])}_\n\n${BOT_MSG.EDIT_REMINDER_INSTRUCTION}`;
                     const options = {
                         parse_mode: "MarkdownV2",
                         reply_markup: {
@@ -189,7 +189,7 @@ bot.on("message", async(msg) => {
                                 [
                                     {
                                         text: "Ấn vào đây để sửa lời nhắc" + ` #${reminderId}`,
-                                        switch_inline_query_current_chat: toReminderString(content, notiTime),
+                                        switch_inline_query_current_chat: toReminderString(content, notiTime, userUtcOffset[userId]),
                                     },
                                 ],
                             ],
@@ -292,7 +292,7 @@ bot.onText(/\/start/, async(msg) => {
     const remindersList = await getReminders(dbConnection, chatId, userId);
     let message = "📅 <b>Lời nhắc:</b>\n\n";
     for (const reminder of remindersList) {
-        const notiTime = formatTime(reminder.notiTime);
+        const notiTime = formatTime(reminder.notiTime, userUtcOffset[userId]);
         message += `🔔 [#${reminder.id}] <b>${reminder.content}</b>\n🕒 <i>${notiTime}</i>\n\n`;
     }
     bot.sendMessage(chatId, message, options);

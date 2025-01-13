@@ -13,6 +13,9 @@ export const hourToMs = (hour) => {
 export const minuteToMs = (minute) => {
     return minute * 60 * 1000;
 };
+const getTimeOffsetWithServer = (utcOffsetInMs) => {
+    return -(minuteToMs(new Date().getTimezoneOffset()) + utcOffsetInMs);
+};
 /**
  * Trích lời nhắc từ định dạng <DD/MM/YY> <hh:mm> <Nội dung lời nhắc>
  */
@@ -27,18 +30,18 @@ export const parseReminder = (text, utcOffsetInMs) => {
     const [hours, minutes] = time.split(':').map(Number);
 
     const D = new Date(year + 2000, month - 1, day, hours, minutes);
-    const offset = -(minuteToMs(new Date().getTimezoneOffset()) + utcOffsetInMs);
-    console.log(utcOffsetInMs, minuteToMs(new Date().getTimezoneOffset()));
+    const offset = getTimeOffsetWithServer(utcOffsetInMs);
+    // console.log(utcOffsetInMs, minuteToMs(new Date().getTimezoneOffset()));
     const notiTime = addOffset(D, offset).toISOString();
     return { content, notiTime };
 }
 
-export const toReminderString = (reminder, notiTime) => { // Convert to format: DD/MM/YY hh:mm reminder
-    const d = new Date(notiTime);
+export const toReminderString = (reminder, notiTime, utcOffset) => { // Convert to format: DD/MM/YY hh:mm reminder
+    const d = addOffset(new Date(notiTime), -getTimeOffsetWithServer(utcOffset));
     const date = d.toLocaleString("en-GB", {
         day: "2-digit",
         month: "2-digit",
-        year: "2-digit"
+        year: "2-digit",
     });
     const time = d.toLocaleString("en-GB", {
         hour: "2-digit",
@@ -47,8 +50,9 @@ export const toReminderString = (reminder, notiTime) => { // Convert to format: 
     return `${date} ${time} ${reminder}`;
 }
 
-export const formatTime = (date) => {
-    return new Date(date).toLocaleString("en-GB", {
+export const formatTime = (date, utcOffset) => {
+    const d = addOffset(new Date(date), -getTimeOffsetWithServer(utcOffset));
+    return d.toLocaleString("en-GB", {
         day: "2-digit",
         month: "2-digit",
         year: "2-digit",
