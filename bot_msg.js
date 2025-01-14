@@ -13,3 +13,5 @@ export const WRONG_REMINDER_ID = "Sai định dạng ID lời nhắc hoặc ID l
 export const UPDATE_TIMEZONE_INSTRUCTION = "Vui lòng gửi số giờ lệch so với chuẩn GMT/UTC. Ví dụ GMT+7 thì nhập 7.";
 export const UPDATE_TIMEZONE_SUCCESS = "Cập nhật timezone thành công!";
 export const UPDATE_TIMEZONE_FIRST = "Vui lòng cập nhật timezone trước khi thực hiện các hành động khác.";
+export const CURRENT_TIMEZONE = "Timezone hiện tại của bạn là GMT";
+export const INVALID_TIMEZONE_FORMAT = "Định dạng timezone không hợp lệ, vui lòng nhập một số.";

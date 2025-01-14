@@ -93,7 +93,12 @@ const handleQuery = (data, chatId, userId) => {
         }
         case "timezone_update": {
             const options = {};
-            bot.sendMessage(chatId, BOT_MSG.UPDATE_TIMEZONE_INSTRUCTION, options);
+            let message = BOT_MSG.UPDATE_TIMEZONE_INSTRUCTION;
+            if (userUtcOffset[userId] !== undefined) {
+                const currentOffset = userUtcOffset[userId] / (60 * 60 * 1000); // convert ms to hours
+                message += `\n\n${BOT_MSG.CURRENT_TIMEZONE} ${currentOffset}`;
+            }
+            bot.sendMessage(chatId, message, options);
             break;
         }
     }
@@ -241,6 +246,11 @@ bot.on("message", async(msg) => {
             }
             case "timezone_update": {
                 const utcOffset = parseInt(escapeMarkdown(text));
+                if (isNaN(utcOffset)) {
+                    bot.sendMessage(chatId, BOT_MSG.INVALID_TIMEZONE_FORMAT);
+                    userAction[userId] = "timezone_update";
+                    break;
+                }
                 const utcOffsetInMs = hourToMs(utcOffset);
                 const dbResult = await updateUserTimezoneOffset(dbConnection, chatId, userId, utcOffsetInMs);
                 if (dbResult) {
