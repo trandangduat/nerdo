@@ -12,3 +12,4 @@ export const REMINDER_DATE_IN_PAST_ERROR = "Thời gian đặt lời nhắc đã
 export const WRONG_REMINDER_ID = "Sai định dạng ID lời nhắc hoặc ID lời nhắc không tồn tại.";
 export const UPDATE_TIMEZONE_INSTRUCTION = "Vui lòng gửi số giờ lệch so với chuẩn GMT/UTC. Ví dụ GMT+7 thì nhập 7.";
 export const UPDATE_TIMEZONE_SUCCESS = "Cập nhật timezone thành công!";
+export const UPDATE_TIMEZONE_FIRST = "Vui lòng cập nhật timezone trước khi thực hiện các hành động khác.";

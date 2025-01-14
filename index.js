@@ -284,17 +284,31 @@ bot.onText(/\/start/, async(msg) => {
             },
         ],
     ];
+    if (userUtcOffset[userId] === undefined) {
+        inline_keyboard = [
+            [
+                {
+                    text: "Update timezone",
+                    callback_data: "timezone_update",
+                },
+            ],
+        ];
+    }
     const options = {
         reply_markup: {
             inline_keyboard
         },
         parse_mode: "HTML"
     };
-    const remindersList = await getReminders(dbConnection, chatId, userId);
     let message = "📅 <b>Lời nhắc:</b>\n\n";
-    for (const reminder of remindersList) {
-        const notiTime = formatTime(reminder.notiTime, userUtcOffset[userId]);
-        message += `🔔 [#${reminder.id}] <b>${reminder.content}</b>\n🕒 <i>${notiTime}</i>\n\n`;
+    if (userUtcOffset[userId] === undefined) {
+        message = BOT_MSG.UPDATE_TIMEZONE_FIRST;
+    } else {
+        const remindersList = await getReminders(dbConnection, chatId, userId);
+        for (const reminder of remindersList) {
+            const notiTime = formatTime(reminder.notiTime, userUtcOffset[userId]);
+            message += `🔔 [#${reminder.id}] <b>${reminder.content}</b>\n🕒 <i>${notiTime}</i>\n\n`;
+        }
     }
     bot.sendMessage(chatId, message, options);
 });
@@ -302,17 +316,29 @@ bot.onText(/\/start/, async(msg) => {
 bot.onText(/\/add/, async(msg) => {
     const chatId = msg.chat.id;
     const userId = msg.from.id;
+    if (userUtcOffset[userId] === undefined) {
+        bot.sendMessage(chatId, BOT_MSG.UPDATE_TIMEZONE_FIRST);
+        return;
+    }
     handleQuery("reminder_add", chatId, userId);
 });
 
 bot.onText(/\/edit/, async(msg) => {
     const chatId = msg.chat.id;
     const userId = msg.from.id;
+    if (userUtcOffset[userId] === undefined) {
+        bot.sendMessage(chatId, BOT_MSG.UPDATE_TIMEZONE_FIRST);
+        return;
+    }
     handleQuery("reminder_edit", chatId, userId);
 });
 
 bot.onText(/\/del/, async(msg) => {
     const chatId = msg.chat.id;
     const userId = msg.from.id;
+    if (userUtcOffset[userId] === undefined) {
+        bot.sendMessage(chatId, BOT_MSG.UPDATE_TIMEZONE_FIRST);
+        return;
+    }
     handleQuery("reminder_remove", chatId, userId);
 });
