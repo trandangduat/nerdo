@@ -5,10 +5,10 @@ import { createReminder, createUser, deleteReminder, findUser, getAllReminders, 
 import { parseReminder, formatTime, toReminderString, removeBeginningMention, escapeMarkdown, hourToMs } from "./utils.js";
 import * as BOT_MSG from "./bot_msg.js";
 
-const connectToDatabase = async(attempts = 5) => {
+const connectToDatabase = async(attempts = 20) => {
     let con;
-    while (attempts--) {
-        console.log("CONNECTING TO DATABASE ATTEMPT #" + (5 - attempts));
+    for (let i = 1; i <= attempts; i++) {
+        console.log("CONNECTING TO DATABASE ATTEMPT #" + i);
         try {
             con = await mysql.createConnection({
                 host: process.env.DB_HOST,
@@ -20,8 +20,9 @@ const connectToDatabase = async(attempts = 5) => {
             console.log("KET NOI DATABASE THANH CONG!");
             return con;
         } catch(err) {
-            console.log(err);
-            await new Promise(resolve => setTimeout(resolve, 2000));
+            // console.log(err);
+            console.log("KHONG THANH CONG");
+            await new Promise(resolve => setTimeout(resolve, 1000));
         }
     }
     return null;
