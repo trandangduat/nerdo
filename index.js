@@ -1,36 +1,22 @@
 import TelegramBot from "node-telegram-bot-api";
-import mysql from 'mysql2/promise'
 import { scheduledJobs, scheduleJob } from "node-schedule";
 import { createReminder, createUser, deleteReminder, findUser, getAllReminders, getAllUserTimezoneOffset, getReminder, getReminders, updateReminder, updateReminderNotifiedStatus, updateUserTimezoneOffset } from "./db_op.js";
 import { parseReminder, formatTime, toReminderString, removeBeginningMention, escapeMarkdown, hourToMs } from "./utils.js";
 import * as BOT_MSG from "./bot_msg.js";
+import Database from "better-sqlite3";
+import fs from "fs";
 
-const connectToDatabase = async(attempts = 20) => {
-    let con;
-    for (let i = 1; i <= attempts; i++) {
-        console.log("CONNECTING TO DATABASE ATTEMPT #" + i);
-        try {
-            con = await mysql.createConnection({
-                host: process.env.DB_HOST,
-                port: process.env.DB_PORT,
-                user: process.env.DB_USER,
-                password: process.env.DB_PASS,
-                database: process.env.DB_DATABASE,
-            });
-            console.log("KET NOI DATABASE THANH CONG!");
-            return con;
-        } catch(err) {
-            // console.log(err);
-            console.log("KHONG THANH CONG");
-            await new Promise(resolve => setTimeout(resolve, 1000));
-        }
-    }
-    return null;
-};
+const connectToDatabase = (dbFile) => {
+    const db = new Database(dbFile, { verbose: console.log });
+    db.pragma('journal_mode = WAL');
+    const migration = fs.readFileSync('db.sql', 'utf8');
+    db.exec(migration);
+    return db;
+}
 
-const sendReminder = async (chatId, reminderId, content) => {
+const sendReminder = (chatId, reminderId, content) => {
     bot.sendMessage(chatId, content);
-    await updateReminderNotifiedStatus(dbConnection, reminderId, true);
+    updateReminderNotifiedStatus(db, reminderId, 1);
 };
 
 const cancelScheduledJob = (chatId, reminderId) => {
@@ -40,13 +26,13 @@ const cancelScheduledJob = (chatId, reminderId) => {
     }
 };
 
-const setScheduleJob = async(chatId, userId, reminderId, reminderContent, notiTime) => {
+const setScheduleJob = (chatId, userId, reminderId, reminderContent, notiTime) => {
     if (scheduleJobs[chatId] === undefined) {
         scheduleJobs[chatId] = {};
     }
     cancelScheduledJob(chatId, reminderId);
-    scheduleJobs[chatId][reminderId] = scheduleJob(notiTime, async() => {
-        await sendReminder(chatId, reminderId, reminderContent)
+    scheduleJobs[chatId][reminderId] = scheduleJob(notiTime, () => {
+        sendReminder(chatId, reminderId, reminderContent)
     });
     console.log("LƯU THÀNH CÔNG SCHEDULE JOB " + reminderId + ` ${reminderContent}`);
     console.log(chatId, reminderId);
@@ -58,8 +44,8 @@ const setScheduleJob = async(chatId, userId, reminderId, reminderContent, notiTi
     }
 };
 
-const resetScheduleJobs = async () => {
-    const reminders = await getAllReminders(dbConnection);
+const resetScheduleJobs = () => {
+    const reminders = getAllReminders(db);
     for (const reminder of reminders) {
         const { chatId, userId, id, content, notiTime } = reminder;
         const utcNow = new Date().toISOString(); // Current time in UTC
@@ -67,7 +53,7 @@ const resetScheduleJobs = async () => {
             console.log(BOT_MSG.REMINDER_DATE_IN_PAST_ERROR);
             continue;
         }
-        await setScheduleJob(chatId, userId, id, content, notiTime);
+        setScheduleJob(chatId, userId, id, content, notiTime);
     }
 };
 
@@ -104,8 +90,8 @@ const handleQuery = (data, chatId, userId) => {
     }
 };
 
-const resetUserTimezoneOffset = async() => {
-    const users = await getAllUserTimezoneOffset(dbConnection);
+const resetUserTimezoneOffset = () => {
+    const users = getAllUserTimezoneOffset(db);
     for (const u of users) {
         const {userId, utcOffset} = u;
         userUtcOffset[userId] = utcOffset;
@@ -114,14 +100,14 @@ const resetUserTimezoneOffset = async() => {
 
 const token = process.env.BOT_API;
 const bot = new TelegramBot(token, {polling: true});
-const dbConnection = await connectToDatabase();
+const db = connectToDatabase("nerdo.db");
 const userAction = {};
 const userUtcOffset = {};
 let currentReminderId = null;
 const scheduleJobs = {};
 
-await resetScheduleJobs();
-await resetUserTimezoneOffset();
+resetScheduleJobs();
+resetUserTimezoneOffset();
 
 bot.on("callback_query", async(query) => {
     const msg = query.message;
@@ -131,13 +117,13 @@ bot.on("callback_query", async(query) => {
     handleQuery(data, chatId, userId);
 });
 
-bot.on("message", async(msg) => {
+bot.on("message", (msg) => {
     let text = msg.text;
     const userId = msg.from.id;
     const chatId = msg.chat.id;
 
-    if (!await findUser(dbConnection, chatId, userId)) {
-        await createUser(dbConnection, chatId, userId);
+    if (!findUser(db, chatId, userId)) {
+        createUser(db, chatId, userId);
     }
 
     if (text !== undefined && text.startsWith('/')) {
@@ -166,9 +152,9 @@ bot.on("message", async(msg) => {
                     userAction[userId] = "reminder_add";
                     break;
                 }
-                const dbResult = await createReminder(dbConnection, chatId, userId, content, notiTime);
+                const dbResult = createReminder(db, chatId, userId, content, notiTime);
                 if (dbResult) {
-                    await setScheduleJob(chatId, userId, dbResult.insertId, content, notiTime);
+                    setScheduleJob(chatId, userId, dbResult.lastInsertRowid, content, notiTime);
                     bot.sendMessage(chatId, BOT_MSG.REMINDER_SAVED_SUCCESS);
                 }
 
@@ -177,9 +163,9 @@ bot.on("message", async(msg) => {
             case "reminder_edit": {
                 const reminderId = escapeMarkdown(text);
                 currentReminderId = reminderId;
-                const dbResult = await getReminder(dbConnection, reminderId);
+                const dbResult = getReminder(db, reminderId);
                 if (dbResult) {
-                    const reminder = dbResult[0] || {};
+                    const reminder = dbResult;
                     const {notiTime, content} = reminder;
                     if (notiTime === undefined) {
                         bot.sendMessage(chatId, BOT_MSG.WRONG_REMINDER_ID);
@@ -223,9 +209,9 @@ bot.on("message", async(msg) => {
                     break;
                 }
                 const reminderId = currentReminderId;
-                const dbResult = await updateReminder(dbConnection, reminderId, notiTime, content);
+                const dbResult = updateReminder(db, reminderId, notiTime, content);
                 if (dbResult) {
-                    await setScheduleJob(chatId, userId, reminderId, content, notiTime);
+                    setScheduleJob(chatId, userId, reminderId, content, notiTime);
                     bot.sendMessage(chatId, BOT_MSG.REMINDER_SAVED_SUCCESS);
                 }
                 currentReminderId = null;
@@ -234,8 +220,9 @@ bot.on("message", async(msg) => {
             }
             case "reminder_remove": {
                 const reminderId = escapeMarkdown(text);
-                const dbResult = await deleteReminder(dbConnection, reminderId);
-                if (dbResult && dbResult.affectedRows > 0) {
+                const dbResult = deleteReminder(db, reminderId);
+                console.log(dbResult);
+                if (dbResult && dbResult.changes > 0) {
                     cancelScheduledJob(chatId, reminderId);
                     bot.sendMessage(chatId, BOT_MSG.REMINDER_DELETED_SUCCESS);
                 } else {
@@ -252,7 +239,7 @@ bot.on("message", async(msg) => {
                     break;
                 }
                 const utcOffsetInMs = hourToMs(utcOffset);
-                const dbResult = await updateUserTimezoneOffset(dbConnection, chatId, userId, utcOffsetInMs);
+                const dbResult = updateUserTimezoneOffset(db, chatId, userId, utcOffsetInMs);
                 if (dbResult) {
                     bot.sendMessage(chatId, BOT_MSG.UPDATE_TIMEZONE_SUCCESS);
                     userUtcOffset[userId] = utcOffsetInMs;
@@ -314,7 +301,7 @@ bot.onText(/\/start/, async(msg) => {
     if (userUtcOffset[userId] === undefined) {
         message = BOT_MSG.UPDATE_TIMEZONE_FIRST;
     } else {
-        const remindersList = await getReminders(dbConnection, chatId, userId);
+        const remindersList = getReminders(db, chatId, userId);
         for (const reminder of remindersList) {
             const notiTime = formatTime(reminder.notiTime, userUtcOffset[userId]);
             message += `🔔 [#${reminder.id}] <b>${reminder.content}</b>\n🕒 <i>${notiTime}</i>\n\n`;
@@ -352,3 +339,5 @@ bot.onText(/\/del/, async(msg) => {
     }
     handleQuery("reminder_remove", chatId, userId);
 });
+
+process.on('exit', () => db.close());
