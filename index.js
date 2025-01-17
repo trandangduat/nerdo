@@ -1,10 +1,12 @@
 import TelegramBot from "node-telegram-bot-api";
-import { scheduledJobs, scheduleJob } from "node-schedule";
+import { scheduleJob } from "node-schedule";
 import { createReminder, createUser, deleteReminder, findUser, getAllReminders, getAllUserTimezoneOffset, getReminder, getReminders, updateReminder, updateReminderNotifiedStatus, updateUserTimezoneOffset } from "./db_op.js";
-import { parseReminder, formatTime, toReminderString, removeBeginningMention, escapeMarkdown, hourToMs } from "./utils.js";
+import { parseReminder, formatTime, toReminderString, removeBeginningMention, escapeMarkdown, hourToMs, minuteToMs } from "./utils.js";
 import * as BOT_MSG from "./bot_msg.js";
 import Database from "better-sqlite3";
 import fs from "fs";
+import { GoogleGenerativeAI } from "@google/generative-ai";
+import { type } from "os";
 
 const connectToDatabase = (dbFile) => {
     const db = new Database(dbFile, { verbose: console.log });
@@ -98,13 +100,31 @@ const resetUserTimezoneOffset = () => {
     }
 };
 
+const initGenAI = () => {
+    const genAI = new GoogleGenerativeAI(process.env.GEMINI_API);
+    const instruction = `Nhiệm vụ của bạn là xử lý các yêu cầu đặt lời nhắc. Hãy trả về kết quả dưới dạng DD/MM/YY HH:MM <Nội dung lời nhắc>. KHÔNG thêm những chi tiết không cần thiết khác.`;
+    const model = genAI.getGenerativeModel({
+        model: "gemini-1.5-flash-8b",
+        systemInstruction: instruction,
+    });
+    return model;
+};
+
 const token = process.env.BOT_API;
 const bot = new TelegramBot(token, {polling: true});
 const db = connectToDatabase("nerdo.db");
+const ai = initGenAI();
 const userAction = {};
 const userUtcOffset = {};
 let currentReminderId = null;
 const scheduleJobs = {};
+
+const result = await ai.generateContent(`Thời gian hiện tại là ${formatTime(new Date(), 0)}. Ngày mai 2 giờ chiều nhắc tôi đăng ký tín chỉ.`);
+const response = result.response;
+
+console.log(JSON.stringify(response, null, 2));
+console.log(response.text());
+process.exit(0)
 
 resetScheduleJobs();
 resetUserTimezoneOffset();
