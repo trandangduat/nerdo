@@ -6,7 +6,7 @@ import * as BOT_MSG from "./bot_msg.js";
 import Database from "better-sqlite3";
 import fs from "fs";
 import { GoogleGenerativeAI } from "@google/generative-ai";
-import { type } from "os";
+import { transcribe } from "./speech-to-text.js";
 
 const connectToDatabase = (dbFile) => {
     const db = new Database(dbFile, { verbose: console.log });
@@ -119,12 +119,8 @@ const userUtcOffset = {};
 let currentReminderId = null;
 const scheduleJobs = {};
 
-const result = await ai.generateContent(`Thời gian hiện tại là ${formatTime(new Date(), 0)}. Ngày mai 2 giờ chiều nhắc tôi đăng ký tín chỉ.`);
-const response = result.response;
-
-console.log(JSON.stringify(response, null, 2));
-console.log(response.text());
-process.exit(0)
+// const result = await ai.generateContent(`Thời gian hiện tại là ${formatTime(new Date(), 0)}. Ngày mai 2 giờ chiều nhắc tôi đăng ký tín chỉ.`);
+// const response = result.response;
 
 resetScheduleJobs();
 resetUserTimezoneOffset();

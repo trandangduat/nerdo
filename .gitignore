@@ -2,3 +2,5 @@
 /node_modules
 todo.txt
 *.db*
+*.bin
+*.wav
