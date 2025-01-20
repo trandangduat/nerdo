@@ -6,7 +6,7 @@ import * as BOT_MSG from "./bot_msg.js";
 import Database from "better-sqlite3";
 import fs from "fs";
 import { GoogleGenerativeAI } from "@google/generative-ai";
-import { transcribe } from "./speech-to-text.js";
+import { downloadAndConvertOggToWav, transcribe } from "./speech-to-text.js";
 
 const connectToDatabase = (dbFile) => {
     const db = new Database(dbFile, { verbose: console.log });
@@ -137,6 +137,14 @@ bot.on("message", (msg) => {
     let text = msg.text;
     const userId = msg.from.id;
     const chatId = msg.chat.id;
+    if (msg.voice) {
+        const t = performance.now();
+        bot.getFileLink(msg.voice.file_id).then(async (link) => {
+            const wavPath = await downloadAndConvertOggToWav(link, '/media');
+            const transcript = await transcribe(wavPath);
+            console.log("Transcribing takes:", performance.now() - t, "ms");
+        });
+    }
 
     if (!findUser(db, chatId, userId)) {
         createUser(db, chatId, userId);
