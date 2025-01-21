@@ -6,7 +6,7 @@ import * as BOT_MSG from "./bot_msg.js";
 import Database from "better-sqlite3";
 import fs from "fs";
 import { GoogleGenerativeAI } from "@google/generative-ai";
-import { downloadAndConvertOggToWav, transcribe } from "./speech-to-text.js";
+import { downloadAndConvertOggToWav, downloadVoice, transcribe, transcribe3 } from "./speech-to-text.js";
 
 const connectToDatabase = (dbFile) => {
     const db = new Database(dbFile, { verbose: console.log });
@@ -119,9 +119,6 @@ const userUtcOffset = {};
 let currentReminderId = null;
 const scheduleJobs = {};
 
-// const result = await ai.generateContent(`Thời gian hiện tại là ${formatTime(new Date(), 0)}. Ngày mai 2 giờ chiều nhắc tôi đăng ký tín chỉ.`);
-// const response = result.response;
-
 resetScheduleJobs();
 resetUserTimezoneOffset();
 
@@ -133,18 +130,10 @@ bot.on("callback_query", async(query) => {
     handleQuery(data, chatId, userId);
 });
 
-bot.on("message", (msg) => {
+bot.on("message", async(msg) => {
     let text = msg.text;
     const userId = msg.from.id;
     const chatId = msg.chat.id;
-    if (msg.voice) {
-        const t = performance.now();
-        bot.getFileLink(msg.voice.file_id).then(async (link) => {
-            const wavPath = await downloadAndConvertOggToWav(link, '/media');
-            const transcript = await transcribe(wavPath);
-            console.log("Transcribing takes:", performance.now() - t, "ms");
-        });
-    }
 
     if (!findUser(db, chatId, userId)) {
         createUser(db, chatId, userId);
@@ -164,6 +153,20 @@ bot.on("message", (msg) => {
 
         switch (action) {
             case "reminder_add": {
+                if (msg.voice) {
+                    const t = performance.now();
+                    const link = await bot.getFileLink(msg.voice.file_id);
+                    const voicePath = await downloadVoice(link);
+                    const transcript = await transcribe3(voicePath);
+                    console.log(transcript);
+                    // const transcript = await transcribe2(ai, link);
+                    console.log("Thời gian transcribe xong:", performance.now() - t, "ms");
+                    // const result = await ai.generateContent(`Thời gian hiện tại là ${formatTime(new Date(), userUtcOffset[userId])}.${transcript}`);
+                    // text = result.response.text();
+                    // console.log("Lời nhắc trích được từ audio:", text);
+                    // console.log("Tổng thời gian:", performance.now() - t, "ms");
+                    break;
+                }
                 const {content, notiTime} = parseReminder(text, userUtcOffset[userId]) || {};
                 if (content === undefined) {
                     bot.sendMessage(chatId, BOT_MSG.WRONG_REMINDER_FORMAT, { parse_mode: "MarkdownV2" });
