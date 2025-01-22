@@ -6,7 +6,7 @@ import * as BOT_MSG from "./bot_msg.js";
 import Database from "better-sqlite3";
 import fs from "fs";
 import { GoogleGenerativeAI } from "@google/generative-ai";
-import { convertOggToWav, downloadAndConvertOggToWav, downloadVoice, transcribe, transcribe3, transcribe_hf } from "./speech-to-text.js";
+import { transcribe, transcribeGemini, transcribeHf } from "./speech-to-text.js";
 
 const connectToDatabase = (dbFile) => {
     const db = new Database(dbFile, { verbose: console.log });
@@ -155,19 +155,33 @@ bot.on("message", async(msg) => {
             case "reminder_add": {
                 if (msg.voice) {
                     const t = performance.now();
-                    const link = await bot.getFileLink(msg.voice.file_id);
-                    // const voicePath = await downloadAndConvertOggToWav(link, '/media');
-                    // const transcript = await transcribe(voicePath);
-                    const voicePath = await downloadVoice(link);
-                    const transcript = await transcribe_hf(voicePath);
-                    console.log(transcript);
-                    // const transcript = await transcribe2(ai, link);
+                    const audioUrl = await bot.getFileLink(msg.voice.file_id);
+                    let transcript = "";
+                    console.log(audioUrl);
+
+                    switch (process.env.STT_METHOD) {
+                        case "huggingface":
+                            transcript = await transcribeHf(audioUrl);
+                            break;
+
+                        case "gemini":
+                            transcript = await transcribeGemini(ai, audioUrl);
+                            break;
+
+                        case "whisper.cpp":
+                            transcript = await transcribe(audioUrl);
+                            break;
+
+                        default:
+                            console.log("You have NOT set any Speech-To-Text method.");
+                            break;
+                    }
                     console.log("Thời gian transcribe xong:", performance.now() - t, "ms");
                     const result = await ai.generateContent(`Thời gian hiện tại là ${formatTime(new Date(), userUtcOffset[userId])}.${transcript}`);
                     text = result.response.text();
                     console.log("Lời nhắc trích được từ audio:", text);
                     console.log("Tổng thời gian:", performance.now() - t, "ms");
-                    // break;
+                    break;
                 }
                 const {content, notiTime} = parseReminder(text, userUtcOffset[userId]) || {};
                 if (content === undefined) {

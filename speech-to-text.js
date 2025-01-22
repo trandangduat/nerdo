@@ -10,9 +10,8 @@ import { dirname } from 'path';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 const ffmpeg = require('fluent-ffmpeg');
-const FormData = require('form-data');
 
-export const convertOggToWav = async (oggPath, outputDir) => {
+const convertOggToWav = async (oggPath, outputDir) => {
     const wavPath = path.join(path.join(__dirname, outputDir), `${path.basename(oggPath, '.ogg')}.wav`);
     console.log(wavPath);
     return new Promise((resolve, reject) => {
@@ -24,7 +23,7 @@ export const convertOggToWav = async (oggPath, outputDir) => {
     });
 };
 
-export const downloadVoice = async(url) => {
+const downloadVoice = async(url) => {
     const oggPath = path.join(__dirname, '/media/temp.ogg');
     console.log(oggPath)
     const response = await axios({
@@ -41,7 +40,7 @@ export const downloadVoice = async(url) => {
     });
 };
 
-export const downloadAndConvertOggToWav = async (url, outputDir) => {
+const downloadAndConvertOggToWav = async (url, outputDir) => {
     const oggPath = path.join(__dirname, '/media/temp.ogg');
     console.log(oggPath)
     const response = await axios({
@@ -66,13 +65,14 @@ export const downloadAndConvertOggToWav = async (url, outputDir) => {
     });
 };
 
-export const transcribe = async(wav_path) => {
+export const transcribe = async(audioUrl) => {
+    const wavPath = await downloadAndConvertOggToWav(audioUrl, '/media');
     const whisperAsync = promisify(whisper);
 
     const whisperParams = {
         language: "vi",
         model: "./whisper/weight/ggml-tiny-vi.bin",
-        fname_inp: wav_path,
+        fname_inp: wavPath,
         use_gpu: false,
         flash_attn: false,
         no_prints: true,
@@ -92,82 +92,43 @@ export const transcribe = async(wav_path) => {
     return str;
 };
 
-export const transcribeGemini = async(model, audio_url) => {
-    console.log(audio_url);
-    const oggPath = path.join(__dirname, '/media/temp.ogg');
-    console.log(oggPath)
-    const response = await axios({
-        url: audio_url,
-        method: 'GET',
-        responseType: 'stream'
-    });
-
-    return new Promise((resolve, reject) => {
-        const writer = fs.createWriteStream(oggPath);
-        response.data.pipe(writer);
-        writer.on('finish', async () => {
-            try {
-                const base64Buffer = fs.readFileSync(oggPath);
-                const base64AudioFile = base64Buffer.toString("base64");
-                const result = await model.generateContent([
+export const transcribeGemini = async(model, audioUrl) => {
+    const audioPath = await downloadVoice(audioUrl);
+    const base64Buffer = fs.readFileSync(audioPath);
+    const base64AudioFile = base64Buffer.toString("base64");
+    const result = await model.generateContent([
+        {
+            inlineData: {
+                mimeType: "audio/ogg",
+                data: base64AudioFile
+            }
+        },
+        { text: "Generate a transcript of the speech." },
+    ]);
+    const countTokensResult = await model.countTokens({
+        generateContentRequest: {
+            contents: [
+            {
+                role: "user",
+                parts: [
                     {
                         inlineData: {
                             mimeType: "audio/ogg",
                             data: base64AudioFile
-                        }
-                    },
-                    { text: "Generate a transcript of the speech." },
-                ]);
-                const countTokensResult = await model.countTokens({
-                    generateContentRequest: {
-                        contents: [
-                        {
-                            role: "user",
-                            parts: [
-                                {
-                                    inlineData: {
-                                        mimeType: "audio/wav",
-                                        data: base64AudioFile
-                                    },
-                                },
-                            ],
                         },
-                        ],
                     },
-                });
-                console.log(result.response.text());
-                console.log(countTokensResult);
-                fs.unlinkSync(oggPath); // Remove the temporary OGG file
-                resolve(result.response.text());
-            } catch (err) {
-                reject(err);
-            }
-        });
-        writer.on('error', reject);
+                ],
+            },
+            ],
+        },
     });
+    console.log(result.response.text());
+    console.log(countTokensResult);
 };
 
-export const transcribe3 = async (filePath) => {
-    const formData = new FormData();
-    formData.append('file', fs.createReadStream(filePath));
-    formData.append('temperature', '0.0');
-    formData.append('temperature_inc', '0.2');
-    formData.append('response_format', 'json');
-
-    try {
-        const response = await axios.post('http://127.0.0.1:8080/inference', formData, {
-            headers: {
-                'Content-Type': 'multipart/form-data'
-            }
-        });
-        return response.data;
-    } catch (error) {
-        throw new Error(`Error in transcribe3: ${error.message}`);
-    }
-};
-
-export const transcribe_hf = async(filename) => {
-	const data = fs.readFileSync(filename);
+export const transcribeHf = async(audioUrl) => {
+    const audioPath = await downloadVoice(audioUrl);
+	const data = fs.readFileSync(audioPath);
 	const response = await fetch(
 		"https://api-inference.huggingface.co/models/openai/whisper-large-v3-turbo",
 		{
@@ -180,5 +141,6 @@ export const transcribe_hf = async(filename) => {
 		}
 	);
 	const result = await response.json();
+    console.log(result);
 	return result.text;
 };
