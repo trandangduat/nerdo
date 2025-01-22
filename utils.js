@@ -71,3 +71,6 @@ export const escapeMarkdown = (text) => {
     SPECIAL_CHARS.forEach(char => (text = text.replaceAll(char, `\\${char}`)));
     return text;
 }
+export const styleReminder = (reminderId, content, notiTime, utcOffset) => {
+    return `Lời nhắc \\#${reminderId}:\n🔔 *${escapeMarkdown(content)}*\n🕒 _${formatTime(notiTime, utcOffset)}_\n\n`;
+};

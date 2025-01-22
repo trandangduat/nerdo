@@ -1,7 +1,7 @@
 import TelegramBot from "node-telegram-bot-api";
 import { scheduleJob } from "node-schedule";
 import { createReminder, createUser, deleteReminder, findUser, getAllReminders, getAllUserTimezoneOffset, getReminder, getReminders, updateReminder, updateReminderNotifiedStatus, updateUserTimezoneOffset } from "./db_op.js";
-import { parseReminder, formatTime, toReminderString, removeBeginningMention, escapeMarkdown, hourToMs, minuteToMs } from "./utils.js";
+import { parseReminder, formatTime, toReminderString, removeBeginningMention, escapeMarkdown, hourToMs, minuteToMs, styleReminder } from "./utils.js";
 import * as BOT_MSG from "./bot_msg.js";
 import Database from "better-sqlite3";
 import fs from "fs";
@@ -62,6 +62,62 @@ const resetScheduleJobs = () => {
 const handleQuery = (data, chatId, userId) => {
     userAction[userId] = data;
     switch (data) {
+        case "reminder_start": {
+            let inline_keyboard = [
+                [
+                    {
+                        text: "Add a reminder",
+                        callback_data: "reminder_add",
+                    },
+                ],
+                [
+                    {
+                        text: "Edit a reminder",
+                        callback_data: "reminder_edit",
+                    },
+                ],
+                [
+                    {
+                        text: "Remove a reminder",
+                        callback_data: "reminder_remove",
+                    },
+                ],
+                [
+                    {
+                        text: "Update timezone",
+                        callback_data: "timezone_update",
+                    },
+                ],
+            ];
+            if (userUtcOffset[userId] === undefined) {
+                inline_keyboard = [
+                    [
+                        {
+                            text: "Update timezone",
+                            callback_data: "timezone_update",
+                        },
+                    ],
+                ];
+            }
+            const options = {
+                reply_markup: {
+                    inline_keyboard
+                },
+                parse_mode: "HTML"
+            };
+            let message = "📅 <b>Lời nhắc:</b>\n\n";
+            if (userUtcOffset[userId] === undefined) {
+                message = BOT_MSG.UPDATE_TIMEZONE_FIRST;
+            } else {
+                const remindersList = getReminders(db, chatId, userId);
+                for (const reminder of remindersList) {
+                    const notiTime = formatTime(reminder.notiTime, userUtcOffset[userId]);
+                    message += `🔔 [#${reminder.id}] <b>${reminder.content}</b>\n🕒 <i>${notiTime}</i>\n\n`;
+                }
+            }
+            bot.sendMessage(chatId, message, options);
+            break;
+        }
         case "reminder_add": {
             const options = {
                 parse_mode: "MarkdownV2",
@@ -197,9 +253,16 @@ const scheduleJobs = {};
                         break;
                     }
                     const dbResult = createReminder(db, chatId, userId, content, notiTime);
+                    const reminderId = dbResult.lastInsertRowid;
                     if (dbResult) {
-                        setScheduleJob(chatId, userId, dbResult.lastInsertRowid, content, notiTime);
-                        bot.sendMessage(chatId, BOT_MSG.REMINDER_SAVED_SUCCESS);
+                        setScheduleJob(chatId, userId, reminderId, content, notiTime);
+                        const options = {
+                            parse_mode: "MarkdownV2",
+                            reply_markup: {
+                                inline_keyboard: [ [ { text: "Xem danh sách lời nhắc", callback_data: "reminder_start" } ] ]
+                            }
+                        };
+                        bot.sendMessage(chatId, BOT_MSG.REMINDER_SAVED_SUCCESS + styleReminder(reminderId, content, notiTime, userUtcOffset[userId]), options);
                     }
 
                     break;
@@ -217,7 +280,7 @@ const scheduleJobs = {};
                             break;
                         }
 
-                        const text = `Lời nhắc \\#${reminderId}:\n🔔 *${escapeMarkdown(content)}*\n🕒 _${formatTime(notiTime, userUtcOffset[userId])}_\n\n${BOT_MSG.EDIT_REMINDER_INSTRUCTION}`;
+                        const text = `${styleReminder(reminderId, content, notiTime, userUtcOffset[userId])}${BOT_MSG.EDIT_REMINDER_INSTRUCTION}`;
                         const options = {
                             parse_mode: "MarkdownV2",
                             reply_markup: {
@@ -256,7 +319,13 @@ const scheduleJobs = {};
                     const dbResult = updateReminder(db, reminderId, notiTime, content);
                     if (dbResult) {
                         setScheduleJob(chatId, userId, reminderId, content, notiTime);
-                        bot.sendMessage(chatId, BOT_MSG.REMINDER_SAVED_SUCCESS);
+                        const options = {
+                            parse_mode: "MarkdownV2",
+                            reply_markup: {
+                                inline_keyboard: [ [ { text: "Xem danh sách lời nhắc", callback_data: "reminder_start" } ] ]
+                            }
+                        };
+                        bot.sendMessage(chatId, BOT_MSG.REMINDER_EDITED_SUCCESS + styleReminder(reminderId, content, notiTime, userUtcOffset[userId]), options);
                     }
                     currentReminderId = null;
 
@@ -268,7 +337,12 @@ const scheduleJobs = {};
                     console.log(dbResult);
                     if (dbResult && dbResult.changes > 0) {
                         cancelScheduledJob(chatId, reminderId);
-                        bot.sendMessage(chatId, BOT_MSG.REMINDER_DELETED_SUCCESS);
+                        const options = {
+                            reply_markup: {
+                                inline_keyboard: [ [ { text: "Xem danh sách lời nhắc", callback_data: "reminder_start" } ] ]
+                            }
+                        };
+                        bot.sendMessage(chatId, BOT_MSG.REMINDER_DELETED_SUCCESS, options);
                     } else {
                         bot.sendMessage(chatId, BOT_MSG.WRONG_REMINDER_ID);
                         userAction[userId] = "reminder_remove";
@@ -297,61 +371,7 @@ const scheduleJobs = {};
     bot.onText(/\/start/, async(msg) => {
         const userId = msg.from.id;
         const chatId = msg.chat.id;
-
-
-        let inline_keyboard = [
-            [
-                {
-                    text: "Add a reminder",
-                    callback_data: "reminder_add",
-                },
-            ],
-            [
-                {
-                    text: "Edit a reminder",
-                    callback_data: "reminder_edit",
-                },
-            ],
-            [
-                {
-                    text: "Remove a reminder",
-                    callback_data: "reminder_remove",
-                },
-            ],
-            [
-                {
-                    text: "Update timezone",
-                    callback_data: "timezone_update",
-                },
-            ],
-        ];
-        if (userUtcOffset[userId] === undefined) {
-            inline_keyboard = [
-                [
-                    {
-                        text: "Update timezone",
-                        callback_data: "timezone_update",
-                    },
-                ],
-            ];
-        }
-        const options = {
-            reply_markup: {
-                inline_keyboard
-            },
-            parse_mode: "HTML"
-        };
-        let message = "📅 <b>Lời nhắc:</b>\n\n";
-        if (userUtcOffset[userId] === undefined) {
-            message = BOT_MSG.UPDATE_TIMEZONE_FIRST;
-        } else {
-            const remindersList = getReminders(db, chatId, userId);
-            for (const reminder of remindersList) {
-                const notiTime = formatTime(reminder.notiTime, userUtcOffset[userId]);
-                message += `🔔 [#${reminder.id}] <b>${reminder.content}</b>\n🕒 <i>${notiTime}</i>\n\n`;
-            }
-        }
-        bot.sendMessage(chatId, message, options);
+        handleQuery("reminder_start", chatId, userId);
     });
 
     bot.onText(/\/add/, async(msg) => {
