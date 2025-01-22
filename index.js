@@ -59,7 +59,7 @@ const resetScheduleJobs = () => {
     }
 };
 
-const handleQuery = (data, chatId, userId) => {
+const handleQuery = (data, chatId, userId, queryId = null) => {
     userAction[userId] = data;
     switch (data) {
         case "reminder_start": {
@@ -146,6 +146,9 @@ const handleQuery = (data, chatId, userId) => {
             break;
         }
     }
+    if (queryId) {
+        bot.answerCallbackQuery(queryId);
+    }
 };
 
 const resetUserTimezoneOffset = () => {
@@ -184,7 +187,7 @@ const scheduleJobs = {};
         const data = query.data;
         const userId = query.from.id;
         const chatId = msg.chat.id;
-        handleQuery(data, chatId, userId);
+        handleQuery(data, chatId, userId, query.id);
     });
 
     bot.on("message", async(msg) => {
