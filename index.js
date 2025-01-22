@@ -6,7 +6,7 @@ import * as BOT_MSG from "./bot_msg.js";
 import Database from "better-sqlite3";
 import fs from "fs";
 import { GoogleGenerativeAI } from "@google/generative-ai";
-import { downloadAndConvertOggToWav, downloadVoice, transcribe, transcribe3 } from "./speech-to-text.js";
+import { convertOggToWav, downloadAndConvertOggToWav, downloadVoice, transcribe, transcribe3, transcribe_hf } from "./speech-to-text.js";
 
 const connectToDatabase = (dbFile) => {
     const db = new Database(dbFile, { verbose: console.log });
@@ -156,16 +156,18 @@ bot.on("message", async(msg) => {
                 if (msg.voice) {
                     const t = performance.now();
                     const link = await bot.getFileLink(msg.voice.file_id);
+                    // const voicePath = await downloadAndConvertOggToWav(link, '/media');
+                    // const transcript = await transcribe(voicePath);
                     const voicePath = await downloadVoice(link);
-                    const transcript = await transcribe3(voicePath);
+                    const transcript = await transcribe_hf(voicePath);
                     console.log(transcript);
                     // const transcript = await transcribe2(ai, link);
                     console.log("Thời gian transcribe xong:", performance.now() - t, "ms");
-                    // const result = await ai.generateContent(`Thời gian hiện tại là ${formatTime(new Date(), userUtcOffset[userId])}.${transcript}`);
-                    // text = result.response.text();
-                    // console.log("Lời nhắc trích được từ audio:", text);
-                    // console.log("Tổng thời gian:", performance.now() - t, "ms");
-                    break;
+                    const result = await ai.generateContent(`Thời gian hiện tại là ${formatTime(new Date(), userUtcOffset[userId])}.${transcript}`);
+                    text = result.response.text();
+                    console.log("Lời nhắc trích được từ audio:", text);
+                    console.log("Tổng thời gian:", performance.now() - t, "ms");
+                    // break;
                 }
                 const {content, notiTime} = parseReminder(text, userUtcOffset[userId]) || {};
                 if (content === undefined) {

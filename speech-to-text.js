@@ -70,8 +70,8 @@ export const transcribe = async(wav_path) => {
     const whisperAsync = promisify(whisper);
 
     const whisperParams = {
-        language: "en",
-        model: "./whisper/weight/ggml-base.bin",
+        language: "vi",
+        model: "./whisper/weight/ggml-tiny-vi.bin",
         fname_inp: wav_path,
         use_gpu: false,
         flash_attn: false,
@@ -164,4 +164,21 @@ export const transcribe3 = async (filePath) => {
     } catch (error) {
         throw new Error(`Error in transcribe3: ${error.message}`);
     }
+};
+
+export const transcribe_hf = async(filename) => {
+	const data = fs.readFileSync(filename);
+	const response = await fetch(
+		"https://api-inference.huggingface.co/models/openai/whisper-large-v3-turbo",
+		{
+			headers: {
+				Authorization: `Bearer ${process.env.HUGGING_FACE_TOKEN}`,
+				"Content-Type": "application/json",
+			},
+			method: "POST",
+			body: data,
+		}
+	);
+	const result = await response.json();
+	return result.text;
 };
