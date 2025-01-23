@@ -93,14 +93,14 @@ export const transcribe = async(audioUrl) => {
 };
 
 export const transcribeGemini = async(model, audioUrl) => {
-    const audioPath = await downloadVoice(audioUrl);
-    const base64Buffer = fs.readFileSync(audioPath);
-    const base64AudioFile = base64Buffer.toString("base64");
+    const audioResponse = await fetch(audioUrl);
+    const arrayBuffer = await audioResponse.arrayBuffer();
+    const base64Audio = Buffer.from(arrayBuffer).toString('base64');
     const result = await model.generateContent([
         {
             inlineData: {
                 mimeType: "audio/ogg",
-                data: base64AudioFile
+                data: base64Audio
             }
         },
         { text: "Generate a transcript of the speech." },
@@ -114,7 +114,7 @@ export const transcribeGemini = async(model, audioUrl) => {
                     {
                         inlineData: {
                             mimeType: "audio/ogg",
-                            data: base64AudioFile
+                            data: base64Audio
                         },
                     },
                 ],
@@ -127,8 +127,9 @@ export const transcribeGemini = async(model, audioUrl) => {
 };
 
 export const transcribeHf = async(audioUrl) => {
-    const audioPath = await downloadVoice(audioUrl);
-	const data = fs.readFileSync(audioPath);
+    const audioResponse = await fetch(audioUrl);
+    const arrayBuffer = await audioResponse.arrayBuffer();
+    const base64Audio = Buffer.from(arrayBuffer).toString('base64');
 	const response = await fetch(
 		"https://api-inference.huggingface.co/models/openai/whisper-large-v3-turbo",
 		{
@@ -137,7 +138,9 @@ export const transcribeHf = async(audioUrl) => {
 				"Content-Type": "application/json",
 			},
 			method: "POST",
-			body: data,
+			body: JSON.stringify({
+                inputs: base64Audio
+            }),
 		}
 	);
 	const result = await response.json();

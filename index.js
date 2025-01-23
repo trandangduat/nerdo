@@ -237,11 +237,11 @@ const scheduleJobs = {};
                                 break;
                         }
                         console.log("Thời gian transcribe xong:", performance.now() - t, "ms");
-                        const result = await ai.generateContent(`Thời gian hiện tại là ${formatTime(new Date(), userUtcOffset[userId])}. Yêu cầu đặt lời nhắc là ${transcript}`);
+                        const result = await ai.generateContent(`Thời gian hiện tại: ${formatTime(new Date(), userUtcOffset[userId])}. Yêu cầu: ${transcript}`);
                         text = result.response.text();
                         console.log("Lời nhắc trích được từ audio:", text);
                         console.log("Tổng thời gian:", performance.now() - t, "ms");
-                        break;
+                        // break;
                     }
                     const {content, notiTime} = parseReminder(text, userUtcOffset[userId]) || {};
                     if (content === undefined) {
