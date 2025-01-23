@@ -161,7 +161,28 @@ const resetUserTimezoneOffset = () => {
 
 const initGenAI = () => {
     const genAI = new GoogleGenerativeAI(process.env.GEMINI_API);
-    const instruction = `Nhiệm vụ của bạn là xử lý các yêu cầu đặt lời nhắc. Hãy trả về kết quả dưới dạng DD/MM/YY HH:MM <Nội dung lời nhắc>. KHÔNG thêm những chi tiết không cần thiết khác.`;
+    const instruction = `
+        Bạn là một trợ lý chuyên xử lý các yêu cầu đặt lời nhắc.
+
+        Nhiệm vụ của bạn là chuyển đổi yêu cầu của người dùng thành định dạng: DD/MM/YY HH:MM <Nội dung lời nhắc>.
+
+        Ví dụ:
+        - "Nhắc tôi đi mua đồ lúc 6 giờ chiều ngày mai" -> "16/06/24 18:00 Đi mua đồ" (Giả sử hôm nay là 15/06/2024)
+        - "Lịch họp team lúc 10 giờ sáng 2 ngày nữa" -> "17/06/24 10:00 Lịch họp team" (Giả sử hôm nay là 15/06/2024)
+        - "Nhắc đi ngủ lúc 11h tối" -> "15/06/24 23:00 Nhắc đi ngủ" (Giả sử hôm nay là 15/06/2024)
+        - "Tập thể dục vào lúc 7h30 sáng thứ 6 tuần sau" -> "21/06/24 07:30 Tập thể dục" (Giả sử hôm nay là 15/06/2024)
+        - "Ngày 20 tháng 12 năm 2024 lúc 3 giờ chiều có cuộc hẹn nha khoa" -> "20/12/24 15:00 Có cuộc hẹn nha khoa"
+
+        Nếu người dùng không nói rõ năm, hãy sử dụng năm hiện tại.
+        Nếu người dùng không nói rõ ngày, hãy sử dụng ngày hiện tại nếu thời gian đặt lời nhắc là hôm nay hoặc ngày mai nếu thời gian đặt lời nhắc là trong tương lai (không thuộc hôm nay).
+
+        Bạn cần trích xuất chính xác ngày tháng năm, giờ và phút từ yêu cầu.
+        Nội dung lời nhắc là phần còn lại của yêu cầu.
+
+        KHÔNG thêm bất kỳ thông tin nào khác vào câu trả lời ngoài định dạng này.
+
+        Trả lời đúng theo định dạng yêu cầu, không có bất kỳ thông tin thừa nào khác.
+    `;
     const model = genAI.getGenerativeModel({
         model: "gemini-1.5-flash-8b",
         systemInstruction: instruction,
@@ -237,7 +258,8 @@ const scheduleJobs = {};
                                 break;
                         }
                         console.log("Thời gian transcribe xong:", performance.now() - t, "ms");
-                        const result = await ai.generateContent(`Thời gian hiện tại: ${formatTime(new Date(), userUtcOffset[userId])}. Yêu cầu: ${transcript}`);
+                        const currentTime = formatTime(new Date(), userUtcOffset[userId])
+                        const result = await ai.generateContent(`Thời gian hiện tại: ${currentTime}. Yêu cầu: ${transcript}`);
                         text = result.response.text();
                         console.log("Lời nhắc trích được từ audio:", text);
                         console.log("Tổng thời gian:", performance.now() - t, "ms");
