@@ -234,12 +234,24 @@ const scheduleJobs = {};
 
             switch (action) {
                 case "reminder_add": {
+                    let processingMessage;
                     if (msg.voice) {
+                        processingMessage = await bot.sendMessage(chatId, "Đang xử lý tin nhắn thoại...");
                         const t = performance.now();
                         const audioUrl = await bot.getFileLink(msg.voice.file_id);
-                        let transcript = "";
                         console.log(audioUrl);
 
+                        const spinner = ["⠋","⠙","⠹","⠸","⠼","⠴","⠦","⠧","⠇","⠏"];
+                        let count = 0;
+                        const loading = setInterval(async() => {
+                            count++;
+                            await bot.editMessageText(`${spinner[count % spinner.length]} Đang xử lý...`, {
+                                chat_id: chatId,
+                                message_id: processingMessage.message_id
+                            });
+                        }, 100)
+
+                        let transcript = "";
                         switch (process.env.STT_METHOD) {
                             case "huggingface":
                                 transcript = await transcribeHf(audioUrl);
@@ -257,12 +269,20 @@ const scheduleJobs = {};
                                 console.log("You have NOT set any Speech-To-Text method.");
                                 break;
                         }
+                        clearInterval(loading);
+                        await bot.editMessageText("Đang xử lý yêu cầu đặt lời nhắc...", {
+                            chat_id: chatId,
+                            message_id: processingMessage.message_id
+                        });
+
                         console.log("Thời gian transcribe xong:", performance.now() - t, "ms");
                         const currentTime = formatTime(new Date(), userUtcOffset[userId])
                         const result = await ai.generateContent(`Thời gian hiện tại: ${currentTime}. Yêu cầu: ${transcript}`);
                         text = result.response.text();
                         console.log("Lời nhắc trích được từ audio:", text);
                         console.log("Tổng thời gian:", performance.now() - t, "ms");
+
+                        await bot.deleteMessage(chatId, processingMessage.message_id);
                         // break;
                     }
                     const {content, notiTime} = parseReminder(text, userUtcOffset[userId]) || {};
