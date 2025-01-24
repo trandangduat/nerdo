@@ -190,6 +190,189 @@ const initGenAI = () => {
     return model;
 };
 
+const handleAddReminder = async(msg) => {
+    let text = msg.text;
+    const userId = msg.from.id;
+    const chatId = msg.chat.id;
+
+    if (msg.voice) {
+        const processingMessage = await bot.sendMessage(chatId, "Đang trích dẫn yêu cầu từ voice chat... (￣﹃￣)");
+        const processingMsgId = processingMessage.message_id;
+        const t = performance.now();
+        const audioUrl = await bot.getFileLink(msg.voice.file_id);
+        console.log(audioUrl);
+
+        let transcript = "";
+        switch (process.env.STT_METHOD) {
+            case "huggingface":
+                transcript = await transcribeHf(audioUrl);
+                break;
+
+            case "gemini":
+                transcript = await transcribeGemini(ai, audioUrl);
+                break;
+
+            case "whisper.cpp":
+                transcript = await transcribe(audioUrl);
+                break;
+
+            default:
+                console.log("You have NOT set any Speech-To-Text method.");
+                break;
+        }
+        console.log("Thời gian transcribe xong:", performance.now() - t, "ms");
+
+        await bot.editMessageText("Đang xử lý yêu cầu đặt lời nhắc... ヾ(￣▽￣) Bye~Bye~", {
+            chat_id: chatId,
+            message_id: processingMsgId
+        });
+
+        const currentTime = formatTime(new Date(), userUtcOffset[userId])
+        const result = await ai.generateContent(`Thời gian hiện tại: ${currentTime}. Yêu cầu: ${transcript}`);
+        text = result.response.text();
+        console.log("Lời nhắc trích được từ audio:", text);
+        console.log("Tổng thời gian:", performance.now() - t, "ms");
+
+        await bot.deleteMessage(chatId, processingMsgId);
+    }
+    const {content, notiTime} = parseReminder(text, userUtcOffset[userId]) || {};
+    if (content === undefined) {
+        bot.sendMessage(chatId, BOT_MSG.WRONG_REMINDER_FORMAT, { parse_mode: "MarkdownV2" });
+        userAction[userId] = "reminder_add";
+        return;
+    }
+    const utcNow = new Date().toISOString();
+    if (notiTime <= utcNow) {
+        bot.sendMessage(chatId, BOT_MSG.REMINDER_DATE_IN_PAST_ERROR);
+        userAction[userId] = "reminder_add";
+        return;
+    }
+    const dbResult = createReminder(db, chatId, userId, content, notiTime);
+    const reminderId = dbResult.lastInsertRowid;
+    if (dbResult) {
+        setScheduleJob(chatId, userId, reminderId, content, notiTime);
+        const options = {
+            parse_mode: "MarkdownV2",
+            reply_markup: {
+                inline_keyboard: [ [ { text: "Xem danh sách lời nhắc", callback_data: "reminder_start" } ] ]
+            }
+        };
+        bot.sendMessage(chatId, BOT_MSG.REMINDER_SAVED_SUCCESS + styleReminder(reminderId, content, notiTime, userUtcOffset[userId]), options);
+    }
+};
+
+const handleEditReminder = async (msg) => {
+    const text = msg.text;
+    const userId = msg.from.id;
+    const chatId = msg.chat.id;
+    const reminderId = escapeMarkdown(text);
+    currentReminderId = reminderId;
+    const dbResult = getReminder(db, reminderId);
+    if (dbResult) {
+        const reminder = dbResult;
+        const { notiTime, content } = reminder;
+        if (notiTime === undefined) {
+            bot.sendMessage(chatId, BOT_MSG.WRONG_REMINDER_ID);
+            userAction[userId] = "reminder_edit";
+            return;
+        }
+
+        const text = `${styleReminder(reminderId, content, notiTime, userUtcOffset[userId])}${BOT_MSG.EDIT_REMINDER_INSTRUCTION}`;
+        const options = {
+            parse_mode: "MarkdownV2",
+            reply_markup: {
+                inline_keyboard: [
+                    [
+                        {
+                            text: "Ấn vào đây để sửa lời nhắc" + ` #${reminderId}`,
+                            switch_inline_query_current_chat: toReminderString(content, notiTime, userUtcOffset[userId]),
+                        },
+                    ],
+                ],
+            },
+        };
+        bot.sendMessage(chatId, text, options);
+        userAction[userId] = "reminder_editing";
+    }
+};
+
+const handleEditingReminder = async (msg) => {
+    const text = msg.text;
+    const userId = msg.from.id;
+    const chatId = msg.chat.id;
+    if (currentReminderId == null) {
+        console.log("currentReminderId is null");
+        return;
+    }
+    const { notiTime, content } = parseReminder(text, userUtcOffset[userId]) || {};
+    if (content === undefined) {
+        bot.sendMessage(chatId, BOT_MSG.WRONG_REMINDER_FORMAT, { parse_mode: "MarkdownV2" });
+        userAction[userId] = "reminder_editing";
+        return;
+    }
+    const utcNow = new Date().toISOString();
+    if (notiTime <= utcNow) {
+        bot.sendMessage(chatId, BOT_MSG.REMINDER_DATE_IN_PAST_ERROR);
+        userAction[userId] = "reminder_editing";
+        return;
+    }
+    const reminderId = currentReminderId;
+    const dbResult = updateReminder(db, reminderId, notiTime, content);
+    if (dbResult) {
+        setScheduleJob(chatId, userId, reminderId, content, notiTime);
+        const options = {
+            parse_mode: "MarkdownV2",
+            reply_markup: {
+                inline_keyboard: [ [ { text: "Xem danh sách lời nhắc", callback_data: "reminder_start" } ] ]
+            }
+        };
+        bot.sendMessage(chatId, BOT_MSG.REMINDER_EDITED_SUCCESS + styleReminder(reminderId, content, notiTime, userUtcOffset[userId]), options);
+    }
+    currentReminderId = null;
+};
+
+const handleRemoveReminder = async (msg) => {
+    const text = msg.text;
+    const userId = msg.from.id;
+    const chatId = msg.chat.id;
+    const escapedText = escapeMarkdown(text);
+    const reminderIds = escapedText.split(" ");
+    const dbResult = deleteReminders(db, reminderIds);
+    console.log(dbResult);
+    if (dbResult && dbResult.changes > 0) {
+        for (const r_id of reminderIds) {
+            cancelScheduledJob(chatId, r_id);
+        }
+        const options = {
+            reply_markup: {
+                inline_keyboard: [ [ { text: "Xem danh sách lời nhắc", callback_data: "reminder_start" } ] ]
+            }
+        };
+        bot.sendMessage(chatId, BOT_MSG.REMINDER_DELETED_SUCCESS, options);
+    } else {
+        bot.sendMessage(chatId, BOT_MSG.WRONG_REMINDER_ID);
+        userAction[userId] = "reminder_remove";
+    }
+};
+
+const handleTimezoneUpdate = async (msg) => {
+    const text = msg.text;
+    const userId = msg.from.id;
+    const chatId = msg.chat.id;
+    const utcOffset = parseInt(escapeMarkdown(text));
+    if (isNaN(utcOffset)) {
+        bot.sendMessage(chatId, BOT_MSG.INVALID_TIMEZONE_FORMAT);
+        userAction[userId] = "timezone_update";
+        return;
+    }
+    const utcOffsetInMs = hourToMs(utcOffset);
+    const dbResult = updateUserTimezoneOffset(db, chatId, userId, utcOffsetInMs);
+    if (dbResult) {
+        bot.sendMessage(chatId, BOT_MSG.UPDATE_TIMEZONE_SUCCESS);
+        userUtcOffset[userId] = utcOffsetInMs;
+    }
+};
+
 const token = process.env.BOT_API;
 const bot = new TelegramBot(token, {polling: true});
 const db = connectToDatabase("nerdo.db");
@@ -235,172 +418,23 @@ const spinner = ["㊂", "㊀", "㊁"];
 
             switch (action) {
                 case "reminder_add": {
-                    if (msg.voice) {
-                        const processingMessage = await bot.sendMessage(chatId, "Đang trích dẫn yêu cầu từ voice chat... (￣﹃￣)");
-                        const processingMsgId = processingMessage.message_id;
-                        const t = performance.now();
-                        const audioUrl = await bot.getFileLink(msg.voice.file_id);
-                        console.log(audioUrl);
-
-                        let transcript = "";
-                        switch (process.env.STT_METHOD) {
-                            case "huggingface":
-                                transcript = await transcribeHf(audioUrl);
-                                break;
-
-                            case "gemini":
-                                transcript = await transcribeGemini(ai, audioUrl);
-                                break;
-
-                            case "whisper.cpp":
-                                transcript = await transcribe(audioUrl);
-                                break;
-
-                            default:
-                                console.log("You have NOT set any Speech-To-Text method.");
-                                break;
-                        }
-                        console.log("Thời gian transcribe xong:", performance.now() - t, "ms");
-
-                        await bot.editMessageText("Đang xử lý yêu cầu đặt lời nhắc... ヾ(￣▽￣) Bye~Bye~", {
-                            chat_id: chatId,
-                            message_id: processingMsgId
-                        });
-
-                        const currentTime = formatTime(new Date(), userUtcOffset[userId])
-                        const result = await ai.generateContent(`Thời gian hiện tại: ${currentTime}. Yêu cầu: ${transcript}`);
-                        text = result.response.text();
-                        console.log("Lời nhắc trích được từ audio:", text);
-                        console.log("Tổng thời gian:", performance.now() - t, "ms");
-
-                        await bot.deleteMessage(chatId, processingMsgId);
-                        // break;
-                    }
-                    const {content, notiTime} = parseReminder(text, userUtcOffset[userId]) || {};
-                    if (content === undefined) {
-                        bot.sendMessage(chatId, BOT_MSG.WRONG_REMINDER_FORMAT, { parse_mode: "MarkdownV2" });
-                        userAction[userId] = "reminder_add";
-                        break;
-                    }
-                    const utcNow = new Date().toISOString(); // Current time in UTC
-                    if (notiTime <= utcNow) {
-                        bot.sendMessage(chatId, BOT_MSG.REMINDER_DATE_IN_PAST_ERROR);
-                        userAction[userId] = "reminder_add";
-                        break;
-                    }
-                    const dbResult = createReminder(db, chatId, userId, content, notiTime);
-                    const reminderId = dbResult.lastInsertRowid;
-                    if (dbResult) {
-                        setScheduleJob(chatId, userId, reminderId, content, notiTime);
-                        const options = {
-                            parse_mode: "MarkdownV2",
-                            reply_markup: {
-                                inline_keyboard: [ [ { text: "Xem danh sách lời nhắc", callback_data: "reminder_start" } ] ]
-                            }
-                        };
-                        bot.sendMessage(chatId, BOT_MSG.REMINDER_SAVED_SUCCESS + styleReminder(reminderId, content, notiTime, userUtcOffset[userId]), options);
-                    }
-
+                    handleAddReminder(msg);
                     break;
                 }
                 case "reminder_edit": {
-                    const reminderId = escapeMarkdown(text);
-                    currentReminderId = reminderId;
-                    const dbResult = getReminder(db, reminderId);
-                    if (dbResult) {
-                        const reminder = dbResult;
-                        const {notiTime, content} = reminder;
-                        if (notiTime === undefined) {
-                            bot.sendMessage(chatId, BOT_MSG.WRONG_REMINDER_ID);
-                            userAction[userId] = "reminder_edit";
-                            break;
-                        }
-
-                        const text = `${styleReminder(reminderId, content, notiTime, userUtcOffset[userId])}${BOT_MSG.EDIT_REMINDER_INSTRUCTION}`;
-                        const options = {
-                            parse_mode: "MarkdownV2",
-                            reply_markup: {
-                                inline_keyboard: [
-                                    [
-                                        {
-                                            text: "Ấn vào đây để sửa lời nhắc" + ` #${reminderId}`,
-                                            switch_inline_query_current_chat: toReminderString(content, notiTime, userUtcOffset[userId]),
-                                        },
-                                    ],
-                                ],
-                            },
-                        };
-                        bot.sendMessage(chatId, text, options);
-                        userAction[userId] = "reminder_editing";
-                    }
+                    handleEditReminder(msg);
                     break;
                 }
                 case "reminder_editing": {
-                    if (currentReminderId == null) {
-                        console.log("currentReminderId is null");
-                    }
-                    const {notiTime, content} = parseReminder(text, userUtcOffset[userId]) || {};
-                    if (content === undefined) {
-                        bot.sendMessage(chatId, BOT_MSG.WRONG_REMINDER_FORMAT, { parse_mode: "MarkdownV2" });
-                        userAction[userId] = "reminder_editing";
-                        break;
-                    }
-                    const utcNow = new Date().toISOString(); // Current time in UTC
-                    if (notiTime <= utcNow) {
-                        bot.sendMessage(chatId, BOT_MSG.REMINDER_DATE_IN_PAST_ERROR);
-                        userAction[userId] = "reminder_editing";
-                        break;
-                    }
-                    const reminderId = currentReminderId;
-                    const dbResult = updateReminder(db, reminderId, notiTime, content);
-                    if (dbResult) {
-                        setScheduleJob(chatId, userId, reminderId, content, notiTime);
-                        const options = {
-                            parse_mode: "MarkdownV2",
-                            reply_markup: {
-                                inline_keyboard: [ [ { text: "Xem danh sách lời nhắc", callback_data: "reminder_start" } ] ]
-                            }
-                        };
-                        bot.sendMessage(chatId, BOT_MSG.REMINDER_EDITED_SUCCESS + styleReminder(reminderId, content, notiTime, userUtcOffset[userId]), options);
-                    }
-                    currentReminderId = null;
-
+                    handleEditingReminder(msg);
                     break;
                 }
                 case "reminder_remove": {
-                    const escapedText = escapeMarkdown(text);
-                    const reminderIds = escapedText.split(" ");
-                    const dbResult = deleteReminders(db, reminderIds);
-                    console.log(dbResult);
-                    if (dbResult && dbResult.changes > 0) {
-                        for (const r_id in reminderIds) {
-                            cancelScheduledJob(chatId, r_id);
-                        }
-                        const options = {
-                            reply_markup: {
-                                inline_keyboard: [ [ { text: "Xem danh sách lời nhắc", callback_data: "reminder_start" } ] ]
-                            }
-                        };
-                        bot.sendMessage(chatId, BOT_MSG.REMINDER_DELETED_SUCCESS, options);
-                    } else {
-                        bot.sendMessage(chatId, BOT_MSG.WRONG_REMINDER_ID);
-                        userAction[userId] = "reminder_remove";
-                    }
+                    handleRemoveReminder(msg);
                     break;
                 }
                 case "timezone_update": {
-                    const utcOffset = parseInt(escapeMarkdown(text));
-                    if (isNaN(utcOffset)) {
-                        bot.sendMessage(chatId, BOT_MSG.INVALID_TIMEZONE_FORMAT);
-                        userAction[userId] = "timezone_update";
-                        break;
-                    }
-                    const utcOffsetInMs = hourToMs(utcOffset);
-                    const dbResult = updateUserTimezoneOffset(db, chatId, userId, utcOffsetInMs);
-                    if (dbResult) {
-                        bot.sendMessage(chatId, BOT_MSG.UPDATE_TIMEZONE_SUCCESS);
-                        userUtcOffset[userId] = utcOffsetInMs;
-                    }
+                    handleTimezoneUpdate(msg);
                     break;
                 }
             }
