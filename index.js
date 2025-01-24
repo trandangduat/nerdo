@@ -1,6 +1,6 @@
 import TelegramBot from "node-telegram-bot-api";
 import { scheduleJob } from "node-schedule";
-import { createReminder, createUser, deleteReminder, findUser, getAllReminders, getAllUserTimezoneOffset, getReminder, getReminders, updateReminder, updateReminderNotifiedStatus, updateUserTimezoneOffset } from "./db_op.js";
+import { createReminder, createUser, deleteReminder, deleteReminders, findUser, getAllReminders, getAllUserTimezoneOffset, getReminder, getReminders, updateReminder, updateReminderNotifiedStatus, updateUserTimezoneOffset } from "./db_op.js";
 import { parseReminder, formatTime, toReminderString, removeBeginningMention, escapeMarkdown, hourToMs, minuteToMs, styleReminder } from "./utils.js";
 import * as BOT_MSG from "./bot_msg.js";
 import Database from "better-sqlite3";
@@ -368,11 +368,14 @@ const spinner = ["㊂", "㊀", "㊁"];
                     break;
                 }
                 case "reminder_remove": {
-                    const reminderId = escapeMarkdown(text);
-                    const dbResult = deleteReminder(db, reminderId);
+                    const escapedText = escapeMarkdown(text);
+                    const reminderIds = escapedText.split(" ");
+                    const dbResult = deleteReminders(db, reminderIds);
                     console.log(dbResult);
                     if (dbResult && dbResult.changes > 0) {
-                        cancelScheduledJob(chatId, reminderId);
+                        for (const r_id in reminderIds) {
+                            cancelScheduledJob(chatId, r_id);
+                        }
                         const options = {
                             reply_markup: {
                                 inline_keyboard: [ [ { text: "Xem danh sách lời nhắc", callback_data: "reminder_start" } ] ]

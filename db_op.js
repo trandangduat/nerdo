@@ -132,3 +132,16 @@ export const deleteReminder = (db, reminderId) => {
         return null;
     }
 };
+
+export const deleteReminders = (db, reminderIds) => {
+    try {
+        let result;
+        const sql = "DELETE FROM Reminders WHERE id IN (SELECT value FROM json_each(?))";
+        const stmt = db.prepare(sql);
+        result = stmt.run(JSON.stringify(reminderIds));
+        return result;
+    } catch (error) {
+        console.log(error);
+        return null;
+    }
+};
