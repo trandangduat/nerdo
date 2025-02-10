@@ -7,9 +7,14 @@ const path = require("path");
 const axios = require("axios");
 import { fileURLToPath } from 'url';
 import { dirname } from 'path';
+import Groq from "groq-sdk";
+import { Readable } from "stream";
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 const ffmpeg = require('fluent-ffmpeg');
+const groq = new Groq({
+    apiKey: process.env.GROQ_API_KEY,
+});
 
 const convertOggToWav = async (oggPath, outputDir) => {
     const wavPath = path.join(path.join(__dirname, outputDir), `${path.basename(oggPath, '.ogg')}.wav`);
@@ -127,23 +132,42 @@ export const transcribeGemini = async(model, audioUrl) => {
 };
 
 export const transcribeHf = async(audioUrl) => {
+    console.time("transcribe");
+    console.time("audio preprocess");
     const audioResponse = await fetch(audioUrl);
-    const arrayBuffer = await audioResponse.arrayBuffer();
-    const base64Audio = Buffer.from(arrayBuffer).toString('base64');
+    console.timeEnd("audio preprocess");
 	const response = await fetch(
 		"https://api-inference.huggingface.co/models/openai/whisper-large-v3-turbo",
 		{
 			headers: {
 				Authorization: `Bearer ${process.env.HUGGING_FACE_TOKEN}`,
-				"Content-Type": "application/json",
+				"Content-Type": "audio/ogg",
 			},
 			method: "POST",
-			body: JSON.stringify({
-                inputs: base64Audio
-            }),
+			body: audioResponse.body,
+            duplex: "half"
 		}
 	);
 	const result = await response.json();
     console.log(result);
+    console.timeEnd("transcribe");
 	return result.text;
+};
+
+export const transcribeGroq = async(audioUrl) => {
+    console.time("transcribe");
+    console.time("audio preprocess");
+
+    const oggPath = await downloadVoice(audioUrl);
+    console.timeEnd("audio preprocess");
+
+    const result = await groq.audio.transcriptions.create({
+        file: fs.createReadStream(oggPath),
+        model: "whisper-large-v3-turbo",
+        response_format: "json",
+    });
+
+    console.log(result);
+    console.timeEnd("transcribe");
+    return result.text;
 };

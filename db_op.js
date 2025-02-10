@@ -90,7 +90,7 @@ export const getAllReminders = (db) => {
         const sql = `SELECT content, notiTime, id, chatId FROM Reminders WHERE isNotified = 0 ORDER BY notiTime`;
         const stmt = db.prepare(sql);
         const rows = stmt.all();
-        console.log(rows);
+        // console.log(rows);
         return rows;
     } catch (error) {
         console.log(error);

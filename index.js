@@ -1,15 +1,15 @@
 import TelegramBot from "node-telegram-bot-api";
 import { scheduleJob } from "node-schedule";
 import { createReminder, createUser, deleteReminder, deleteReminders, findUser, getAllReminders, getAllUserTimezoneOffset, getReminder, getReminders, updateReminder, updateReminderNotifiedStatus, updateUserTimezoneOffset } from "./db_op.js";
-import { parseReminder, formatTime, toReminderString, removeBeginningMention, escapeMarkdown, hourToMs, minuteToMs, styleReminder } from "./utils.js";
+import { parseReminder, formatTime, toReminderString, removeBeginningMention, escapeMarkdown, hourToMs, minuteToMs, styleReminder, logColor } from "./utils.js";
 import * as BOT_MSG from "./bot_msg.js";
 import Database from "better-sqlite3";
 import fs from "fs";
-import { GoogleGenerativeAI } from "@google/generative-ai";
-import { transcribe, transcribeGemini, transcribeHf } from "./speech-to-text.js";
+import { transcribe, transcribeGemini, transcribeGroq, transcribeHf } from "./speech-to-text.js";
+import { genReminderFromRequest, initGenAI } from "./gen_ai.js";
 
 const connectToDatabase = (dbFile) => {
-    const db = new Database(dbFile, { verbose: console.log });
+    const db = new Database(dbFile);
     db.pragma('journal_mode = WAL');
     const migration = fs.readFileSync('db.sql', 'utf8');
     db.exec(migration);
@@ -36,9 +36,9 @@ const setScheduleJob = (chatId, userId, reminderId, reminderContent, notiTime) =
     scheduleJobs[chatId][reminderId] = scheduleJob(notiTime, () => {
         sendReminder(chatId, reminderId, reminderContent)
     });
-    console.log("LƯU THÀNH CÔNG SCHEDULE JOB " + reminderId + ` ${reminderContent}`);
-    console.log(chatId, reminderId);
-    console.log(notiTime);
+    console.log(logColor("blue", "job saved"), reminderId + ` ${reminderContent}`);
+    // console.log(chatId, reminderId);
+    // console.log(notiTime);
     try {
         console.log(scheduleJobs[chatId][reminderId].pendingInvocations[0].fireDate);
     } catch (err) {
@@ -66,25 +66,25 @@ const handleQuery = (data, chatId, userId, queryId = null) => {
             let inline_keyboard = [
                 [
                     {
-                        text: "Add a reminder",
+                        text: "Thêm lời nhắc",
                         callback_data: "reminder_add",
                     },
                 ],
                 [
                     {
-                        text: "Edit a reminder",
+                        text: "Sửa lời nhắc",
                         callback_data: "reminder_edit",
                     },
                 ],
                 [
                     {
-                        text: "Remove a reminder",
+                        text: "Xoá lời nhắc",
                         callback_data: "reminder_remove",
                     },
                 ],
                 [
                     {
-                        text: "Update timezone",
+                        text: "Cập nhật múi giờ",
                         callback_data: "timezone_update",
                     },
                 ],
@@ -159,48 +159,18 @@ const resetUserTimezoneOffset = () => {
     }
 };
 
-const initGenAI = () => {
-    const genAI = new GoogleGenerativeAI(process.env.GEMINI_API);
-    const instruction = `
-        Bạn là một trợ lý chuyên xử lý các yêu cầu đặt lời nhắc.
-
-        Nhiệm vụ của bạn là chuyển đổi yêu cầu của người dùng thành định dạng: DD/MM/YY HH:MM <Nội dung lời nhắc>.
-
-        Ví dụ:
-        - "Nhắc tôi đi mua đồ lúc 6 giờ chiều ngày mai" -> "16/06/24 18:00 Đi mua đồ" (Giả sử hôm nay là 15/06/2024)
-        - "Lịch họp team lúc 10 giờ sáng 2 ngày nữa" -> "17/06/24 10:00 Lịch họp team" (Giả sử hôm nay là 15/06/2024)
-        - "Nhắc đi ngủ lúc 11h tối" -> "15/06/24 23:00 Nhắc đi ngủ" (Giả sử hôm nay là 15/06/2024)
-        - "Tập thể dục vào lúc 7h30 sáng thứ 6 tuần sau" -> "21/06/24 07:30 Tập thể dục" (Giả sử hôm nay là 15/06/2024)
-        - "Ngày 20 tháng 12 năm 2024 lúc 3 giờ chiều có cuộc hẹn nha khoa" -> "20/12/24 15:00 Có cuộc hẹn nha khoa"
-
-        Nếu người dùng không nói rõ năm, hãy sử dụng năm hiện tại.
-        Nếu người dùng không nói rõ ngày, hãy sử dụng ngày hiện tại nếu thời gian đặt lời nhắc là hôm nay hoặc ngày mai nếu thời gian đặt lời nhắc là trong tương lai (không thuộc hôm nay).
-
-        Bạn cần trích xuất chính xác ngày tháng năm, giờ và phút từ yêu cầu.
-        Nội dung lời nhắc là phần còn lại của yêu cầu.
-
-        KHÔNG thêm bất kỳ thông tin nào khác vào câu trả lời ngoài định dạng này.
-
-        Trả lời đúng theo định dạng yêu cầu, không có bất kỳ thông tin thừa nào khác.
-    `;
-    const model = genAI.getGenerativeModel({
-        model: "gemini-1.5-flash-8b",
-        systemInstruction: instruction,
-    });
-    return model;
-};
-
 const handleAddReminder = async(msg) => {
     let text = msg.text;
     const userId = msg.from.id;
     const chatId = msg.chat.id;
 
     if (msg.voice) {
-        const processingMessage = await bot.sendMessage(chatId, "Đang trích dẫn yêu cầu từ voice chat... (￣﹃￣)");
+        const processingMessage = await bot.sendMessage(chatId, "Đang trích dẫn yêu cầu từ voice chat... 🗣️");
         const processingMsgId = processingMessage.message_id;
-        const t = performance.now();
+        console.time("processing request");
+        console.time("get audio link");
         const audioUrl = await bot.getFileLink(msg.voice.file_id);
-        console.log(audioUrl);
+        console.timeEnd("get audio link");
 
         let transcript = "";
         switch (process.env.STT_METHOD) {
@@ -216,22 +186,25 @@ const handleAddReminder = async(msg) => {
                 transcript = await transcribe(audioUrl);
                 break;
 
+            case "groq":
+                transcript = await transcribeGroq(audioUrl);
+                break;
+
             default:
                 console.log("You have NOT set any Speech-To-Text method.");
                 break;
         }
-        console.log("Thời gian transcribe xong:", performance.now() - t, "ms");
 
-        await bot.editMessageText("Đang xử lý yêu cầu đặt lời nhắc... ヾ(￣▽￣) Bye~Bye~", {
+        await bot.editMessageText("Sắp xử lý xong yêu cầu đặt lời nhắc... ヾ(￣▽￣) Bye~Bye~", {
             chat_id: chatId,
             message_id: processingMsgId
         });
 
-        const currentTime = formatTime(new Date(), userUtcOffset[userId])
-        const result = await ai.generateContent(`Thời gian hiện tại: ${currentTime}. Yêu cầu: ${transcript}`);
-        text = result.response.text();
-        console.log("Lời nhắc trích được từ audio:", text);
-        console.log("Tổng thời gian:", performance.now() - t, "ms");
+        const currentTime = formatTime(new Date(), userUtcOffset[userId]);
+        text = await genReminderFromRequest(ai, `Thời gian hiện tại là ${currentTime}. ${transcript}`);
+
+        console.log(logColor("blue", "reminder format:"), text);
+        console.timeEnd("processing request");
 
         await bot.deleteMessage(chatId, processingMsgId);
     }

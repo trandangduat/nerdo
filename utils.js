@@ -74,3 +74,13 @@ export const escapeMarkdown = (text) => {
 export const styleReminder = (reminderId, content, notiTime, utcOffset) => {
     return `Lời nhắc \\#${reminderId}:\n🔔 *${escapeMarkdown(content)}*\n🕒 _${formatTime(notiTime, utcOffset)}_\n\n`;
 };
+export const logColor = (color, log) => {
+    const colors = {
+        reset: "\x1b[0m",
+        green: "\x1b[32m",
+        red: "\x1b[31m",
+        yellow: "\x1b[33m",
+        blue: "\x1b[34m",
+    };
+    return `${colors[color]}${log}${colors.reset}`;
+};
